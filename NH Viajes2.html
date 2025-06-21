@@ -1,0 +1,1791 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+    <link as="style" href="https://fonts.googleapis.com/css2?display=swap&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900&amp;family=Space+Grotesk%3Awght%40400%3B500%3B700" onload="this.rel='stylesheet'" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet"/>
+    <title>Stitch Design - Selección de Asientos de Autobús</title>
+    <link href="data:image/x-icon;base64," rel="icon" type="image/x-icon"/>
+    <!-- Carga de Tailwind CSS: Imprescindible para los estilos -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <style type="text/tailwindcss">
+        /*
+         * Estilos Tailwind CSS personalizados
+         * Aquí se definen variables de color y clases base
+         * que se utilizan en toda la aplicación para una
+         * consistencia visual y fácil modificación.
+         */
+        :root {
+          --available-color: #F3F4F6; /* Gray 100 - para disponible */
+          --occupied-color: #3B82F6; /* Blue 500 - para ocupado */
+          
+          --background-color: #F8FAFC; /* Fondo claro */
+          --text-primary-color: #1F2937; /* Texto oscuro para contraste */
+          --text-secondary-color: #6B7280; /* Texto secundario más suave */
+          --border-color: #D1D5DB; /* Borde más definido (Gray 300) */
+          --primary-color: #0c7ff2; /* Azul principal de botones y selección */
+          --drag-color: #FBBF24; /* Amber 400 - para arrastre */
+
+          /* Colores para estados de pago */
+          --paid-color: #10B981; /* Green 500 */
+          --deposit-color: #F59E0B; /* Amber 500 */
+          --unpaid-color: #EF4444; /* Red 400 */
+        }
+        .seat-wrapper {
+          @apply relative flex items-center border border-[var(--border-color)] rounded-xl p-1 bg-white shadow-sm transition-all duration-200 ease-in-out hover:scale-105 hover:shadow-md;
+          width: 100%;
+          min-height: 58px;
+        }
+        .seat {
+          @apply flex items-center justify-center rounded-lg cursor-pointer text-white font-extrabold p-0.5 w-8 h-8 shrink-0 shadow-md transition-all duration-150 ease-in-out;
+          font-size: 0.8rem;
+        }
+        
+        /* Nuevos estados de color para los asientos - SIMPLIFICADOS */
+        .seat-available { @apply bg-[var(--available-color)] text-gray-700 hover:bg-gray-200; }
+        .seat-occupied { @apply bg-[var(--occupied-color)]; } /* Un solo color para ocupado */
+
+        /* Clase para un asiento SELECCIONADO (para ver ficha) o en estado de "presión inicial" */
+        .seat-selected { 
+            @apply ring-4 ring-offset-2 ring-[var(--primary-color)] scale-105 shadow-xl;
+        }
+
+        /* CLASE PARA EL ESTADO "ARRSTRANDO" (DRAG) */
+        .seat-dragging {
+            @apply bg-[var(--drag-color)] opacity-70 scale-105 shadow-xl ring-4 ring-offset-2 ring-[var(--drag-color)];
+            cursor: grabbing !important;
+            z-index: 100; /* Asegurar que esté por encima de otros */
+        }
+        /* CLASE PARA UN TARGET VÁLIDO DE DRAG (cuando un asiento se puede soltar aquí) */
+        .seat-drop-target {
+            @apply ring-4 ring-offset-2 ring-emerald-400 bg-emerald-100;
+        }
+
+        /* Indicador de pago en el asiento */
+        .seat-payment-indicator {
+            @apply absolute top-0 right-0 size-3 rounded-full -mt-1 -mr-1 border-2 border-white;
+        }
+        .seat-payment-indicator-paid { @apply bg-[var(--paid-color)]; }
+        .seat-payment-indicator-deposit { @apply bg-[var(--deposit-color)]; }
+        .seat-payment-indicator-unpaid { @apply bg-[var(--unpaid-color)]; }
+
+
+        .seat-info-frame {
+          @apply flex flex-col justify-center ml-1.5 flex-grow;
+        }
+        .passenger-name-frame {
+          @apply text-[var(--text-secondary-color)] leading-tight block;
+          font-size: 0.65rem;
+        }
+        /* Estilos específicos para la cabina del conductor y el pasillo */
+        .driver-cabin {
+            @apply bg-gray-800 text-white font-bold text-center py-2 rounded-t-xl mb-2 text-sm shadow-md;
+            grid-column: 1 / -1;
+        }
+        .aisle-column {
+            @apply flex items-center justify-center w-full h-full;
+            overflow: hidden;
+        }
+        .aisle-line {
+             @apply w-0.5 h-full bg-slate-300/60 rounded-full;
+        }
+
+        /* Estilos para la lista de pasajeros */
+        .passenger-list-item {
+            @apply flex items-center border-b border-[var(--border-color)] p-2 bg-white transition-all duration-150 ease-in-out hover:bg-gray-50;
+        }
+        .passenger-list-item:last-child {
+            @apply border-b-0; /* Eliminar borde inferior del último elemento */
+        }
+        .passenger-list-seat-number {
+            @apply text-sm font-bold w-8 text-center shrink-0;
+        }
+        .passenger-list-info {
+            @apply flex-grow ml-2;
+        }
+        .passenger-list-name {
+            @apply text-[var(--text-primary-color)] font-medium leading-tight;
+        }
+        .passenger-list-details {
+            @apply text-[var(--text-secondary-color)] text-xs;
+        }
+
+        /* Indicadores de pago en la lista */
+        .payment-indicator {
+            @apply size-3 rounded-full shrink-0 ml-2;
+        }
+        .payment-indicator-paid { @apply bg-[var(--paid-color)]; }
+        .payment-indicator-deposit { @apply bg-[var(--deposit-color)]; }
+        .payment-indicator-unpaid { @apply bg-[var(--unpaid-color)]; }
+
+        /* Estado de arrastre en la lista */
+        .passenger-list-item-dragging {
+            @apply opacity-70 bg-[var(--drag-color)] shadow-lg;
+            cursor: grabbing !important;
+        }
+        .passenger-list-drop-target {
+            @apply ring-2 ring-offset-2 ring-emerald-400 bg-emerald-100;
+        }
+      </style>
+    <style>
+        /*
+         * Estilos CSS regulares
+         * Aquí se incluyen estilos que no están directamente ligados a Tailwind
+         * o que necesitan ser más específicos.
+         */
+        body {
+          min-height: max(884px, 100dvh);
+        }
+
+        .footer-button {
+            @apply shadow-xl hover:shadow-2xl active:shadow-lg transition-shadow duration-200;
+        }
+
+        /* Contenedor principal de secciones de habitaciones */
+        #roomSectionsContainer {
+            padding: 20px;
+            display: flex; /* Usar flexbox para las secciones principales */
+            flex-direction: column; /* Apilar las secciones verticalmente */
+            gap: 30px; /* Espacio entre las secciones (Doble, Triple, Cuádruple) */
+        }
+
+        /* Estilos para cada sección de tipo de habitación (e.g., Doble, Triple) */
+        .room-type-section {
+            background-color: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .room-type-section h3 {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: var(--text-primary-color);
+            margin-bottom: 20px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        /* CUADRÍCULA DE HABITACIONES: Asegurar 3 columnas en todas las pantallas */
+        .room-type-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(calc((100% - 40px) / 3), 1fr)); /* 40px = 2 * gap */
+            gap: 20px; /* Espacio entre las celdas de habitación */
+        }
+        
+        /* Ajuste específico para pantallas más pequeñas para mantener 3 columnas */
+        @media (max-width: 768px) { /* Por ejemplo, para tablets y móviles */
+            .room-type-grid {
+                grid-template-columns: repeat(3, minmax(calc((100% - 20px) / 3), 1fr)); /* Reducimos el gap si es necesario para que quepan 3 */
+                gap: 10px; /* Reducir el gap para ganar espacio */
+            }
+            #roomSectionsContainer {
+                padding: 10px; /* Reducir padding general del contenedor de secciones */
+                gap: 15px; /* Reducir gap entre secciones */
+            }
+            .individual-room-grid-item {
+                padding: 10px; /* Reducir padding de cada item */
+                min-height: 120px; /* Reducir ligeramente la altura mínima */
+            }
+        }
+        
+        @media (max-width: 480px) { /* Para móviles pequeños */
+            .room-type-grid {
+                grid-template-columns: repeat(3, minmax(80px, 1fr)); /* Un mínimo aún menor, si es necesario */
+                gap: 5px; /* Reducir aún más el gap */
+            }
+            .individual-room-grid-item .room-title {
+                font-size: 0.9em; /* Ajustar tamaño de fuente */
+            }
+            /* Ajuste para que los nombres se vean completos en móviles */
+            .individual-room-grid-item .passenger-entry .seat-num-badge {
+                font-size: 0.8em; /* Un poco más pequeño */
+                padding: 2px 6px; /* Ajustar padding */
+            }
+            .individual-room-grid-item .passenger-entry .passenger-name-display {
+                font-size: 0.8em; /* Un poco más pequeño */
+                white-space: normal; /* Permitir salto de línea */
+                overflow: visible; /* Asegurar que el texto sea visible */
+                text-overflow: clip; /* No mostrar puntos suspensivos */
+            }
+        }
+
+        /* NUEVO: Adaptación para pantallas de escritorio (4 columnas) */
+        @media (min-width: 1024px) {
+            #roomSectionsContainer {
+                padding: 30px; /* Más padding general para escritorio */
+            }
+            .room-type-grid {
+                grid-template-columns: repeat(4, minmax(calc((100% - 60px) / 4), 1fr)); /* 4 columnas para escritorio, 60px = 3 * gap */
+                gap: 20px; /* Espacio entre las celdas de habitación */
+            }
+            .individual-room-grid-item {
+                padding: 20px; /* Más padding para los ítems individuales */
+                min-height: 180px; /* Aumentar altura mínima en escritorio */
+            }
+            .individual-room-grid-item .room-title {
+                font-size: 1.2em; /* Aumentar tamaño de fuente del título de la habitación */
+            }
+            .individual-room-grid-item .passenger-entry .passenger-name-display {
+                font-size: 0.95em; /* Ligeramente más grande para mejor legibilidad */
+            }
+        }
+
+
+        /*
+         * *** INICIO DE ESTILOS SIMPLIFICADOS PARA HABITACIONES ***
+         * Estos estilos han sido modificados para un aspecto más limpio y minimalista.
+         */
+        .individual-room-grid-item {
+            background-color: #ffffff; /* Fondo blanco */
+            border: 1px solid #e2e8f0; /* Borde muy sutil (gray-200) */
+            border-radius: 8px;
+            padding: 12px; /* Un poco menos de padding */
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); /* Sombra más suave */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #333;
+            transition: all 0.2s ease-in-out;
+            min-height: 140px; /* Ajuste de altura mínima */
+        }
+        .individual-room-grid-item:hover {
+            transform: translateY(-2px); /* Efecto hover más sutil */
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.12); /* Sombra de hover más suave */
+        }
+        .individual-room-grid-item .room-title {
+            font-weight: 600; /* Menos negrita */
+            font-size: 1em; /* Tamaño de fuente ligeramente menor */
+            margin-bottom: 8px; /* Reducción de margen */
+            padding: 4px 8px; /* Padding más compacto */
+            border-radius: 4px; /* Bordes más suaves */
+            color: #4b5563; /* Texto más oscuro para el título */
+            background-color: #e5e7eb; /* Fondo gris claro */
+            text-align: center;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .individual-room-grid-item .passenger-entry {
+            display: flex;
+            align-items: flex-start;
+            background-color: #f9fafb; /* Fondo aún más claro para la entrada del pasajero */
+            border: 1px solid #f3f4f6; /* Borde casi invisible */
+            border-radius: 4px;
+            padding: 6px; /* Padding más pequeño */
+            margin-bottom: 6px; /* Margen más pequeño */
+            width: 100%;
+            box-sizing: border-box;
+            color: #4a5568; /* Texto un poco más suave */
+            box-shadow: none; /* Eliminar sombra */
+        }
+        .individual-room-grid-item .passenger-entry .seat-num-badge {
+            font-weight: 600; /* Menos negrita */
+            font-size: 0.85em; /* Tamaño de fuente ligeramente menor */
+            margin-right: 8px; /* Margen reducido */
+            background-color: #eff6ff; /* Azul muy claro */
+            padding: 2px 7px; /* Padding ajustado */
+            border-radius: 3px;
+            color: #2563eb; /* Azul para el número */
+            min-width: 28px; /* Ancho mínimo ajustado */
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .individual-room-grid-item .passenger-entry .passenger-name-display {
+            font-size: 0.85em; /* Tamaño de fuente ligeramente menor */
+            flex-grow: 1;
+            white-space: normal;
+            overflow: visible;
+            text-overflow: clip;
+            line-height: 1.3; /* Ajuste para un espaciado de línea más compacto si el texto salta */
+        }
+        .empty-room-placeholder {
+            @apply flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-200 bg-gray-50 rounded-lg p-3 text-center; /* Bordes y fondo más sutiles */
+            min-height: 140px; /* Altura mínima para que se vea bien */
+            font-size: 0.85em; /* Texto más pequeño */
+        }
+        .empty-room-placeholder .material-icons-outlined {
+            font-size: 2.5rem; /* Tamaño de icono ligeramente más pequeño */
+            margin-bottom: 0.5rem;
+            color: #9ca3af; /* Gris más claro para el icono */
+        }
+
+        /* *** FIN DE ESTILOS SIMPLIFICADOS PARA HABITACIONES *** */
+
+
+        /* Estilos para el target de drag en las habitaciones */
+        .room-drop-target {
+            @apply ring-4 ring-offset-2 ring-emerald-400 bg-emerald-100;
+        }
+
+        /* Estilos para la leyenda de colores (extra) */
+        #paymentLegend {
+            @apply fixed bottom-5 right-5 bg-white p-3 rounded-lg shadow-lg border border-gray-200 text-sm z-40;
+        }
+        #paymentLegend div {
+            @apply flex items-center mb-1 last:mb-0;
+        }
+        #paymentLegend .color-box {
+            @apply size-4 rounded-full mr-2;
+        }
+
+        /* Estilos para el modal de confirmación personalizado */
+        .custom-confirm-modal-overlay {
+            @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50;
+        }
+        .custom-confirm-modal-content {
+            @apply bg-white p-6 rounded-lg shadow-xl max-w-sm w-full;
+        }
+        .custom-confirm-modal-content h4 {
+            @apply text-lg font-semibold mb-3 text-[var(--text-primary-color)];
+        }
+        .custom-confirm-modal-content p {
+            @apply text-sm text-[var(--text-secondary-color)] mb-5;
+        }
+        .custom-confirm-modal-content .button-group {
+            @apply flex justify-end gap-3;
+        }
+        .custom-confirm-modal-content button {
+            @apply px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200;
+        }
+        .custom-confirm-modal-content button.cancel {
+            @apply bg-gray-200 text-gray-700 hover:bg-gray-300;
+        }
+        .custom-confirm-modal-content button.confirm {
+            @apply bg-red-500 text-white hover:bg-red-600;
+        }
+      </style>
+</head>
+<body class="bg-[var(--background-color)]" style='font-family: "Space Grotesk", "Noto Sans", sans-serif;'>
+<div class="relative flex size-full min-h-screen flex-col justify-between group/design-root overflow-x-hidden">
+    <!-- Encabezado de la aplicación -->
+    <div>
+        <header class="sticky top-0 z-20 bg-[var(--background-color)]/90 backdrop-blur-md shadow-sm">
+            <div class="flex items-center p-3">
+                <button class="text-[var(--text-primary-color)] flex size-9 shrink-0 items-center justify-center rounded-full hover:bg-slate-200 active:bg-slate-300 transition-colors">
+                    <span class="material-icons-outlined">arrow_back</span>
+                </button>
+                <h1 class="text-[var(--text-primary-color)] text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center">Seleccionar Asientos (Autobús)</h1>
+                <button id="undoButton" class="text-[var(--text-primary-color)] flex size-9 shrink-0 items-center justify-center rounded-full hover:bg-slate-200 active:bg-slate-300 transition-colors ml-auto" title="Deshacer último cambio" disabled>
+                    <span class="material-icons-outlined">undo</span>
+                </button>
+            </div>
+        </header>
+        <!-- Contenido principal de la aplicación -->
+        <main class="p-2">
+            <!-- Sección: Mapa de Asientos -->
+            <div class="mb-5 rounded-xl bg-white shadow-md overflow-hidden">
+                <div class="p-2 bg-slate-50 border-b border-[var(--border-color)]">
+                    <h2 class="text-[var(--text-primary-color)] text-base font-semibold leading-tight">Mapa de Asientos</h2>
+                    <p class="text-[var(--text-secondary-color)] text-xs mt-0.5">Toca un asiento para ver su ficha. Arrastra y suelta para intercambiar pasajeros.</p>
+                </div>
+                <div id="seatMapContainer" class="p-1 grid grid-cols-[1fr_1fr_0.2fr_1fr_1fr] gap-x-1 gap-y-1 relative">
+                    <div class="driver-cabin col-span-full">
+                        Cabina del Conductor
+                    </div>
+                    <!-- Asientos: Se renderizan dinámicamente o se inicializan aquí -->
+                    <!-- Ejemplo de asiento (los demás se generan en JS) -->
+                    <div class="seat-wrapper z-10" data-seat-number="1" draggable="true"> 
+                        <button class="seat seat-occupied"> <span class="text-sm font-bold">1</span> </button> 
+                        <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> 
+                        <div class="seat-payment-indicator"></div> <!-- Indicador de pago -->
+                    </div>
+                    <div class="seat-wrapper z-10" data-seat-number="2" draggable="true">
+                        <button class="seat seat-occupied"> <span class="text-sm font-bold">2</span> </button>
+                        <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div>
+                        <div class="seat-payment-indicator"></div>
+                    </div>
+                    <div class="aisle-column"> <div class="aisle-line"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="3" draggable="true">
+                        <button class="seat seat-occupied"> <span class="text-sm font-bold">3</span> </button>
+                        <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div>
+                        <div class="seat-payment-indicator"></div>
+                    </div>
+                    <div class="seat-wrapper z-10" data-seat-number="4" draggable="true">
+                        <button class="seat seat-occupied"> <span class="text-sm font-bold">4</span> </button>
+                        <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div>
+                        <div class="seat-payment-indicator"></div>
+                    </div>
+
+                    <div class="seat-wrapper z-10" data-seat-number="5" draggable="true"> <button class="seat seat-available"> <span class="text-sm font-bold">5</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="6" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">6</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="aisle-column"> <div class="aisle-line"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="7" draggable="true"> <button class="seat seat-available"> <span class="text-sm font-bold">7</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="8" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">8</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+
+                    <div class="seat-wrapper z-10" data-seat-number="9" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">9</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="10" draggable="true"> <button class="seat seat-available"> <span class="text-sm font-bold">10</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="aisle-column"> <div class="aisle-line"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="11" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">11</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="12" draggable="true"> <button class="seat seat-available"> <span class="text-sm font-bold">12</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+
+                    <div class="seat-wrapper z-10" data-seat-number="13" draggable="true"> <button class="seat seat-available"> <span class="text-sm font-bold">13</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="14" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">14</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="aisle-column"> <div class="aisle-line"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="15" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">15</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="16" draggable="true"> <button class="seat seat-available"> <span class="text-sm font-bold">16</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+
+                    <div class="seat-wrapper z-10" data-seat-number="17" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">17</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div>
+                    <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="18" draggable="true"> <button class="seat seat-available"> <span class="text-sm font-bold">18</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="aisle-column"> <div class="aisle-line"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="19" draggable="true"> <button class="seat seat-available"> <span class="text-sm font-bold">19</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="20" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">20</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+
+                    <div class="seat-wrapper z-10" data-seat-number="21" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">21</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="22" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">22</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="aisle-column"> <div class="aisle-line"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="23" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">23</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="24" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">24</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+
+                    <div class="seat-wrapper z-10" data-seat-number="25" draggable="true"> <button class="seat seat-available"> <span class="text-sm font-bold">25</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="26" draggable="true"> <button class="seat seat-available"> <span class="text-sm font-bold">26</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="aisle-column"> <div class="aisle-line"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="27" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">27</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="28" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">28</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+
+                    <div class="seat-wrapper z-10" data-seat-number="29" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">29</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="30" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">30</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="aisle-column"> <div class="aisle-line"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="31" draggable="true"> <button class="seat seat-available"> <span class="text-sm font-bold">31</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="32" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">32</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+
+                    <div class="seat-wrapper z-10" data-seat-number="33" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">33</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="34" draggable="true"> <button class="seat seat-available"> <span class="text-sm font-bold">34</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="aisle-column"> <div class="aisle-line"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="35" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">35</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="36" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">36</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+
+                    <div class="seat-wrapper z-10" data-seat-number="37" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">37</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="38" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">38</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="aisle-column"> <div class="aisle-line"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="39" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">39</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="40" draggable="true"> <button class="seat seat-available"> <span class="text-sm font-bold">40</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+
+                    <div class="seat-wrapper z-10" data-seat-number="41" draggable="true"> <button class="seat seat-available"> <span class="text-sm font-bold">41</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="42" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">42</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="aisle-column"> <div class="aisle-line"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="43" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">43</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                    <div class="seat-wrapper z-10" data-seat-number="44" draggable="true"> <button class="seat seat-occupied"> <span class="text-sm font-bold">44</span> </button> <div class="seat-info-frame"> <span class="passenger-name-frame"></span> </div> <div class="seat-payment-indicator"></div> </div>
+                </div>
+            </div>
+
+            <!-- Sección: Lista de Pasajeros -->
+            <div class="mb-5 rounded-xl bg-white shadow-md overflow-hidden">
+                <div class="p-2 bg-slate-50 border-b border-[var(--border-color)]">
+                    <h2 class="text-[var(--text-primary-color)] text-base font-semibold leading-tight">Lista de Pasajeros</h2>
+                    <p class="text-[var(--text-secondary-color)] text-xs mt-0.5">Arrastra desde o hacia aquí para reasignar asientos. Toca para ver detalles.</p>
+                </div>
+                <div id="passengerListContainer" class="divide-y divide-[var(--border-color)]">
+                    <!-- Los elementos de la lista de pasajeros se renderizan aquí dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Sección: Mapa de Habitaciones -->
+            <div class="mb-5 rounded-xl bg-white shadow-md overflow-hidden">
+                <div class="p-2 bg-slate-50 border-b border-[var(--border-color)]">
+                    <h2 style="
+                        color: var(--text-primary-color);
+                        margin-top: 0;
+                        margin-bottom: 20px;
+                        border-bottom: 2px solid #eee;
+                        padding-bottom: 10px;
+                        font-size: 1.25rem;
+                        font-weight: 600;
+                        line-height: 1.75rem;
+                    ">Mapa de Habitaciones</h2>
+                    <p class="text-[var(--text-secondary-color)] text-xs mt-0.5">Arrastra pasajeros a las habitaciones para reasignarlos. El tipo de habitación se ajustará.</p>
+                </div>
+                <div id="roomSectionsContainer">
+                    <!-- Las secciones de habitaciones se renderizan aquí dinámicamente -->
+                </div>
+            </div>
+        </main>
+    </div>
+    <!-- Pie de página con botones de acción global -->
+    <footer class="sticky bottom-0 z-20 bg-[var(--background-color)]/90 backdrop-blur-md border-t border-[var(--border-color)] p-3">
+        <div class="flex justify-center gap-3 max-w-lg mx-auto">
+            <button id="saveAllChangesBtn" class="footer-button flex-1 min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-xl h-11 px-4 bg-[var(--primary-color)] text-white text-base font-semibold leading-normal tracking-[0.015em] hover:bg-blue-600 active:bg-blue-700">
+                <span class="truncate">Guardar Cambios</span>
+                <span class="material-icons-outlined ml-2 text-xl">save</span>
+            </button>
+            <button id="resetBtn" class="footer-button flex-1 min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-xl h-11 px-4 bg-red-500 text-white text-base font-semibold leading-normal tracking-[0.015em] hover:bg-red-600 active:bg-red-700">
+                <span class="truncate">Resetear Viaje</span>
+                <span class="material-icons-outlined ml-2 text-xl">refresh</span>
+            </button>
+        </div>
+    </footer>
+
+    <!-- Ficha de Detalles del Asiento (Modal deslizante) -->
+    <div id="seatDetailsCard" class="fixed top-0 right-0 w-full max-w-sm h-full bg-white shadow-xl z-50 transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col p-4 gap-2 overflow-y-auto">
+      <div class="flex justify-between items-center mb-2">
+        <h3 class="text-lg font-semibold text-[var(--text-primary-color)]">Ficha del Asiento</h3>
+        <button onclick="closeSeatCard()" class="text-gray-500 hover:text-red-500 text-xl font-bold">×</button>
+      </div>
+      <p><strong>Asiento:</strong> <span id="seatNumberCard" class="font-semibold text-[var(--text-primary-color)]"></span></p>
+      
+      <label for="passengerNameCard" class="text-sm mt-2 font-medium text-[var(--text-primary-color)]">Pasajero:</label>
+      <input id="passengerNameCard" type="text"
+             class="w-full mt-1 px-3 py-2 border border-[var(--border-color)] rounded text-sm text-[var(--text-primary-color)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]" />
+      
+      <label for="paidAmountCard" class="text-sm mt-2 font-medium text-[var(--text-primary-color)]">Monto Pagado:</label>
+      <input id="paidAmountCard" type="number" step="0.01" min="0"
+             class="w-full mt-1 px-3 py-2 border border-[var(--border-color)] rounded text-sm text-[var(--text-primary-color)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]" />
+
+      <p class="mt-2 text-sm"><strong>Total Viaje:</strong> <span id="totalAmountCard" class="font-semibold text-[var(--text-primary-color)]">$100.00</span></p>
+      <p class="text-sm"><strong>Resta por Pagar:</strong> <span id="dueCard" class="font-semibold text-[var(--text-primary-color)]"></span></p>
+
+      <!-- Selector de Tipo de Habitación -->
+      <label for="roomTypeCard" class="text-sm mt-2 font-medium text-[var(--text-primary-color)]">Tipo de Habitación:</label>
+      <select id="roomTypeCard"
+              class="w-full mt-1 px-3 py-2 border border-[var(--border-color)] rounded text-sm text-[var(--text-primary-color)] focus:outline-none focus:ring-2 focus:ring-[var(--primary-color)]">
+          <option value="Doble">Doble</option>
+          <option value="Triple">Triple</option>
+          <option value="Cuádruple">Cuádruple</option>
+          <option value="N/A">Sin asignar</option>
+      </select>
+
+      <div class="mt-4 flex gap-2">
+        <button id="saveChangesBtn" class="flex-1 bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 active:bg-blue-800 transition-colors">
+          Guardar
+        </button>
+        <button id="clearSeatBtn" class="flex-1 bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600 active:bg-red-700 transition-colors">
+          Vaciar Asiento
+        </button>
+      </div>
+
+      <!-- Sección de generación de perfil con LLM -->
+      <div class="mt-4 pt-4 border-t border-[var(--border-color)]">
+          <button id="generateProfileBtn" class="w-full bg-purple-600 text-white px-3 py-2 rounded hover:bg-purple-700 active:bg-purple-800 transition-colors">
+              Generar Perfil de Pasajero ✨
+          </button>
+          <div id="profileLoadingIndicator" class="hidden text-center text-sm text-gray-500 mt-2">Cargando perfil...</div>
+          <div id="passengerProfileDisplay" class="mt-3 p-3 bg-blue-50 rounded text-sm text-blue-800 hidden">
+              <!-- El perfil generado por la IA se mostrará aquí -->
+          </div>
+      </div>
+
+    </div>
+
+    <!-- Leyenda de Pago (Extra) -->
+    <div id="paymentLegend">
+        <div class="font-bold text-gray-700 mb-2">Leyenda de Pago</div>
+        <div>
+            <div class="color-box bg-[var(--paid-color)]"></div>
+            <span>Pagado</span>
+        </div>
+        <div>
+            <div class="color-box bg-[var(--deposit-color)]"></div>
+            <span>Abono</span>
+        </div>
+        <div>
+            <div class="color-box bg-[var(--unpaid-color)]"></div>
+            <span>Pendiente</span>
+        </div>
+    </div>
+
+    <!-- Modal de confirmación personalizado (para resetear viaje o vaciar asiento) -->
+    <div id="customConfirmModal" class="custom-confirm-modal-overlay hidden">
+        <div class="custom-confirm-modal-content">
+            <h4 id="customConfirmTitle"></h4>
+            <p id="customConfirmMessage"></p>
+            <div class="button-group">
+                <button id="customConfirmCancelBtn" class="cancel">Cancelar</button>
+                <button id="customConfirmConfirmBtn" class="confirm">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // Este script contiene toda la lógica JavaScript de la aplicación.
+    // Es "Vanilla JavaScript" porque utiliza directamente las APIs del navegador
+    // para manipular el DOM, manejar eventos y gestionar el estado, sin dependencias
+    // de librerías o frameworks de frontend más grandes.
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- Variables Globales ---
+        let draggedSeatWrapper = null; // Referencia al asiento que se está arrastrando desde el mapa
+        let draggedListItem = null; // Referencia al item de la lista que se está arrastrando
+        let currentSelectedSeatNumber = null; // Número del asiento cuya ficha de detalles está abierta
+        const undoStack = []; // Pila para almacenar los estados de `seatData` para la función de deshacer
+        const maxUndoStates = 10; // Límite de estados en la pila de deshacer
+        const totalSeats = 44; // Número total de asientos en el autobús
+        const defaultTotalAmount = 100.00; // Precio base del viaje por asiento
+        let seatData = []; // Array que almacena los datos de cada asiento. Declarado con `let` para reasignación desde localStorage.
+        let confirmCallback = null; // Callback para el modal de confirmación personalizado
+
+        // --- Referencias a Elementos del DOM ---
+        // Obtener referencias a los elementos HTML por su ID para poder manipularlos.
+        const undoButton = document.getElementById('undoButton');
+        const saveAllChangesBtn = document.getElementById('saveAllChangesBtn'); 
+        const resetBtn = document.getElementById('resetBtn'); 
+        const passengerListContainer = document.getElementById('passengerListContainer');
+        const seatDetailsCard = document.getElementById('seatDetailsCard'); // La ficha modal de detalles del asiento
+        const roomSectionsContainer = document.getElementById('roomSectionsContainer'); // Contenedor de habitaciones
+
+        // Referencias a los elementos dentro de la ficha modal
+        const seatNumberCard = document.getElementById('seatNumberCard');
+        const passengerNameCard = document.getElementById('passengerNameCard');
+        const paidAmountCard = document.getElementById('paidAmountCard');
+        const totalAmountCard = document.getElementById('totalAmountCard');
+        const dueCard = document.getElementById('dueCard');
+        const roomTypeCard = document.getElementById('roomTypeCard'); // Selector de tipo de habitación
+        const saveChangesBtn = document.getElementById('saveChangesBtn');
+        const clearSeatBtn = document.getElementById('clearSeatBtn');
+
+        // Referencias a los elementos relacionados con la integración de IA (Gemini API)
+        const generateProfileBtn = document.getElementById('generateProfileBtn');
+        const profileLoadingIndicator = document.getElementById('profileLoadingIndicator');
+        const passengerProfileDisplay = document.getElementById('passengerProfileDisplay');
+
+        // Referencias al modal de confirmación personalizado
+        const customConfirmModal = document.getElementById('customConfirmModal');
+        const customConfirmTitle = document.getElementById('customConfirmTitle');
+        const customConfirmMessage = document.getElementById('customConfirmMessage');
+        const customConfirmCancelBtn = document.getElementById('customConfirmCancelBtn');
+        const customConfirmConfirmBtn = document.getElementById('customConfirmConfirmBtn');
+
+        // --- Funciones de Utilidad ---
+
+        /**
+         * Muestra un modal de confirmación personalizado al usuario.
+         * Esta función reemplaza las llamadas a `alert()` y `confirm()` nativas del navegador.
+         * @param {string} title - Título del modal.
+         * @param {string} message - Mensaje de confirmación.
+         * @param {function(boolean): void} callback - Función a ejecutar cuando el usuario confirma o cancela.
+         * Recibe `true` si confirma, `false` si cancela.
+         */
+        function showCustomConfirm(title, message, callback) {
+            customConfirmTitle.textContent = title;
+            customConfirmMessage.textContent = message;
+            confirmCallback = callback; // Guardar el callback para ejecutarlo después
+            customConfirmModal.classList.remove('hidden'); // Mostrar el modal
+
+            // Configurar los manejadores de clic para los botones del modal
+            customConfirmConfirmBtn.onclick = () => {
+                customConfirmModal.classList.add('hidden'); // Ocultar el modal
+                if (confirmCallback) confirmCallback(true); // Ejecutar callback con true
+            };
+
+            customConfirmCancelBtn.onclick = () => {
+                customConfirmModal.classList.add('hidden'); // Ocultar el modal
+                if (confirmCallback) confirmCallback(false); // Ejecutar callback con false
+            };
+        }
+
+        /**
+         * Determina la clase de color para el indicador de estado de pago
+         * en función del monto pagado y el total.
+         * @param {number} paid - Monto pagado por el pasajero.
+         * @param {number} total - Monto total del viaje.
+         * @returns {string} Clase CSS para el indicador de pago.
+         */
+        function getPaymentStatusClass(paid, total) {
+            if (paid >= total) {
+                return 'payment-indicator-paid'; // Pagado completamente
+            } else if (paid > 0) {
+                return 'payment-indicator-deposit'; // Abono realizado (parcialmente pagado)
+            } else {
+                return 'payment-indicator-unpaid'; // Nada pagado (pendiente)
+            }
+        }
+
+        // --- Funciones de Manejo de Eventos (Drag & Drop, Clicks) ---
+        // Estas funciones manejan la lógica de arrastrar y soltar, así como los clics en los asientos y la lista de pasajeros.
+        // Son implementadas con las APIs nativas de Drag & Drop de JavaScript.
+
+        /**
+         * Manejador para el inicio del arrastre de un asiento desde el mapa.
+         * @param {Event} event - El evento de arrastre.
+         */
+        function handleDragStart(event) {
+            event.stopPropagation(); // Previene que el evento se propague a elementos padres
+            draggedSeatWrapper = event.currentTarget; // Almacena el elemento que se está arrastrando
+            
+            const seatNumber = parseInt(draggedSeatWrapper.dataset.seatNumber);
+            const data = seatData[seatNumber];
+
+            // No permitir arrastrar asientos vacíos desde el mapa
+            if (!data.passengerName || data.passengerName.trim() === '') {
+                event.preventDefault(); // Cancela el arrastre
+                draggedSeatWrapper = null;
+                console.log('No se puede arrastrar un asiento vacío desde el mapa.');
+                return;
+            }
+
+            closeSeatCard(); // Cierra la ficha de detalles si está abierta al iniciar un arrastre
+            saveState(); // Guardar el estado actual ANTES de cualquier modificación potencial por el arrastre
+            event.dataTransfer.setData('text/plain', `seatMap:${seatNumber}`); // Establece los datos a transferir (origen: mapa)
+            event.dataTransfer.effectAllowed = 'move'; // Define el efecto visual de la operación
+            
+            draggedSeatWrapper.classList.add('seat-dragging'); // Añade clase visual para indicar arrastre
+            console.log(`DragStart Mapa: Asiento ${seatNumber} con ${data.passengerName}`);
+        }
+
+        /**
+         * Manejador para el evento 'dragover' en un posible destino de arrastre (asientos del mapa).
+         * @param {Event} event - El evento de arrastre.
+         */
+        function handleDragOver(event) {
+            event.preventDefault(); // Permite que el elemento sea un destino de drop
+            event.stopPropagation();
+            const targetElement = event.currentTarget;
+
+            // Asegurarse de que el destino no sea el mismo que el elemento arrastrado
+            if (draggedSeatWrapper && draggedSeatWrapper !== targetElement) {
+                event.dataTransfer.dropEffect = 'move'; // Indica que se puede realizar una acción de 'mover'
+                targetElement.classList.add('seat-drop-target'); // Añade clase visual al destino
+            } else if (draggedListItem && draggedListItem.dataset.seatNumber !== targetElement.dataset.seatNumber) {
+                // También manejar el caso de arrastre desde la lista a un asiento del mapa
+                event.dataTransfer.dropEffect = 'move';
+                targetElement.classList.add('seat-drop-target');
+            }
+        }
+
+        /**
+         * Manejador para el evento 'dragleave' en un destino de arrastre (asientos del mapa).
+         * @param {Event} event - El evento de arrastre.
+         */
+        function handleDragLeave(event) {
+            event.currentTarget.classList.remove('seat-drop-target'); // Remueve la clase visual del destino
+        }
+
+        /**
+         * Manejador para el evento 'drop' en un asiento del mapa.
+         * @param {Event} event - El evento de arrastre.
+         */
+        function handleDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const targetSeatWrapper = event.currentTarget;
+            targetSeatWrapper.classList.remove('seat-drop-target'); // Limpia la clase visual del destino
+
+            const dataTransfer = event.dataTransfer.getData('text/plain'); // Obtiene los datos transferidos
+            const targetSeatNumber = parseInt(targetSeatWrapper.dataset.seatNumber);
+
+            // Determinar el origen del arrastre y realizar la acción correspondiente
+            if (dataTransfer.startsWith('seatMap:')) {
+                const sourceSeatNumber = parseInt(dataTransfer.split(':')[1]);
+                const sourceSeatWrapper = document.querySelector(`.seat-wrapper[data-seat-number="${sourceSeatNumber}"]`);
+                
+                if (sourceSeatWrapper && sourceSeatNumber !== targetSeatNumber) {
+                    console.log(`Drop en Mapa (Origen Mapa): De asiento ${sourceSeatNumber} a asiento ${targetSeatNumber}`);
+                    swapSeatData(sourceSeatNumber, targetSeatNumber); // Intercambia datos entre asientos del mapa
+                }
+            } else if (dataTransfer.startsWith('passengerList:')) {
+                const sourceSeatNumber = parseInt(dataTransfer.split(':')[1]);
+
+                if (targetSeatNumber !== sourceSeatNumber) {
+                    console.log(`Drop en Mapa (Origen Lista): De asiento ${sourceSeatNumber} a asiento ${targetSeatNumber}`);
+                    swapSeatData(sourceSeatNumber, targetSeatNumber); // Intercambia datos entre lista y mapa
+                }
+            }
+        }
+
+        /**
+         * Manejador para el evento 'dragend' (se activa cuando el arrastre finaliza, ya sea exitoso o cancelado).
+         * Limpia las clases de arrastre y las variables globales de arrastre.
+         * @param {Event} event - El evento de arrastre.
+         */
+        function handleDragEnd(event) {
+            console.log('DragEnd (General): Limpiando estado de arrastre.');
+            if (draggedSeatWrapper) {
+                draggedSeatWrapper.classList.remove('seat-dragging');
+            }
+            if (draggedListItem) {
+                 draggedListItem.classList.remove('passenger-list-item-dragging');
+            }
+            draggedSeatWrapper = null; // Reinicia la variable global
+            draggedListItem = null; // Reinicia la variable global
+            // Limpiar todas las clases de drop target en todos los elementos posibles de la interfaz
+            document.querySelectorAll('.seat-drop-target').forEach(el => el.classList.remove('seat-drop-target'));
+            document.querySelectorAll('.passenger-list-drop-target').forEach(el => el.classList.remove('passenger-list-drop-target'));
+            document.querySelectorAll('.room-drop-target').forEach(el => el.classList.remove('room-drop-target'));
+        }
+
+        /**
+         * Manejador para el clic en un asiento del mapa.
+         * Abre la ficha de detalles del asiento.
+         * @param {Event} event - El evento de clic.
+         */
+        function handleClick(event) {
+            const clickedElement = event.currentTarget;
+            const seatNumber = parseInt(clickedElement.dataset.seatNumber);
+            openSeatCard(seatNumber); // Abre la ficha para el asiento clicado
+        }
+
+        /**
+         * Manejador para el inicio del arrastre de un elemento de la lista de pasajeros.
+         * @param {Event} event - El evento de arrastre.
+         */
+        function handleListItemDragStart(event) {
+            event.stopPropagation();
+            draggedListItem = event.currentTarget; // Almacena el elemento de la lista que se está arrastrando
+            
+            const seatNumber = parseInt(draggedListItem.dataset.seatNumber);
+            const data = seatData[seatNumber];
+
+            // No permitir arrastrar asientos vacíos desde la lista
+            if (!data.passengerName || data.passengerName.trim() === '') {
+                event.preventDefault();
+                draggedListItem = null;
+                console.log('No se puede arrastrar un asiento vacío desde la lista.');
+                return;
+            }
+
+            closeSeatCard(); // Cierra la ficha de detalles si está abierta
+            saveState(); // Guardar estado ANTES de cualquier modificación
+            event.dataTransfer.setData('text/plain', `passengerList:${seatNumber}`); // Origen: lista
+            event.dataTransfer.effectAllowed = 'move';
+            
+            draggedListItem.classList.add('passenger-list-item-dragging'); // Añade clase visual
+            console.log(`DragStart Lista: Asiento ${seatNumber} con ${data.passengerName}`);
+        }
+
+        /**
+         * Manejador para el evento 'dragover' en un destino de arrastre (elementos de la lista).
+         * @param {Event} event - El evento de arrastre.
+         */
+        function handleListItemDragOver(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const targetElement = event.currentTarget;
+
+            // Asegurarse de que el destino no sea el mismo que el elemento arrastrado
+            if (draggedListItem && draggedListItem !== targetElement) {
+                event.dataTransfer.dropEffect = 'move';
+                targetElement.classList.add('passenger-list-drop-target');
+            } else if (draggedSeatWrapper && draggedSeatWrapper.dataset.seatNumber !== targetElement.dataset.seatNumber) {
+                // También manejar arrastre desde el mapa a un elemento de la lista
+                event.dataTransfer.dropEffect = 'move';
+                targetElement.classList.add('passenger-list-drop-target');
+            }
+        }
+
+        /**
+         * Manejador para el evento 'dragleave' en un destino de arrastre (elementos de la lista).
+         * @param {Event} event - El evento de arrastre.
+         */
+        function handleListItemDragLeave(event) {
+            event.currentTarget.classList.remove('passenger-list-drop-target');
+        }
+
+        /**
+         * Manejador para el evento 'drop' en un elemento de la lista de pasajeros.
+         * @param {Event} event - El evento de arrastre.
+         */
+        function handleListItemDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const targetListItem = event.currentTarget;
+            targetListItem.classList.remove('passenger-list-drop-target');
+
+            const dataTransfer = event.dataTransfer.getData('text/plain');
+            const targetSeatNumber = parseInt(targetListItem.dataset.seatNumber);
+
+            // Determinar origen y realizar el intercambio
+            if (dataTransfer.startsWith('seatMap:')) {
+                const sourceSeatNumber = parseInt(dataTransfer.split(':')[1]);
+                
+                if (targetSeatNumber !== sourceSeatNumber) {
+                    console.log(`Drop en Lista (Origen Mapa): De asiento ${sourceSeatNumber} a asiento ${targetSeatNumber}`);
+                    swapSeatData(sourceSeatNumber, targetSeatNumber);
+                }
+            } else if (dataTransfer.startsWith('passengerList:')) {
+                const sourceSeatNumber = parseInt(dataTransfer.split(':')[1]);
+                
+                if (draggedListItem && draggedListItem !== targetListItem) {
+                    console.log(`Drop en Lista (Origen Lista): De asiento ${sourceSeatNumber} a asiento ${targetSeatNumber}`);
+                    swapSeatData(sourceSeatNumber, targetSeatNumber);
+                }
+            }
+        }
+
+        /**
+         * Manejador para el evento 'dragend' de un elemento de la lista (limpia la clase de arrastre).
+         * @param {Event} event - El evento de arrastre.
+         */
+        function handleListItemDragEnd(event) { 
+            console.log('DragEnd (ListItem): Limpiando estado de arrastre.');
+            if (draggedListItem) {
+                draggedListItem.classList.remove('passenger-list-item-dragging');
+            }
+            draggedListItem = null;
+            // Limpiar todas las clases de drop target
+            document.querySelectorAll('.seat-drop-target').forEach(el => el.classList.remove('seat-drop-target'));
+            document.querySelectorAll('.passenger-list-drop-target').forEach(el => el.classList.remove('passenger-list-drop-target'));
+            document.querySelectorAll('.room-drop-target').forEach(el => el.classList.remove('room-drop-target'));
+        }
+
+        /**
+         * Manejador para el clic en un elemento de la lista de pasajeros.
+         * Abre la ficha de detalles del asiento.
+         * @param {Event} event - El evento de clic.
+         */
+        function handleListItemClick(event) {
+            const clickedElement = event.currentTarget;
+            const seatNumber = parseInt(clickedElement.dataset.seatNumber);
+            openSeatCard(seatNumber);
+        }
+
+        /**
+         * Manejador para el evento 'dragover' en una sección de habitación.
+         * @param {Event} event - El evento de arrastre.
+         */
+        function handleRoomDragOver(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const targetElement = event.currentTarget;
+            event.dataTransfer.dropEffect = 'move';
+            targetElement.classList.add('room-drop-target');
+        }
+
+        /**
+         * Manejador para el evento 'dragleave' en una sección de habitación.
+         * @param {Event} event - El evento de arrastre.
+         */
+        function handleRoomDragLeave(event) {
+            event.currentTarget.classList.remove('room-drop-target');
+        }
+
+        /**
+         * Manejador para el evento 'drop' en una sección de habitación.
+         * Reasigna el tipo de habitación del pasajero arrastrado.
+         * @param {Event} event - El evento de arrastre.
+         */
+        function handleRoomDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const targetRoomDiv = event.currentTarget;
+            targetRoomDiv.classList.remove('room-drop-target');
+
+            const dataTransfer = event.dataTransfer.getData('text/plain');
+            let sourceSeatNumber;
+
+            // Obtener el número de asiento del pasajero arrastrado
+            if (dataTransfer.startsWith('seatMap:')) {
+                sourceSeatNumber = parseInt(dataTransfer.split(':')[1]);
+            } else if (dataTransfer.startsWith('passengerList:')) {
+                sourceSeatNumber = parseInt(dataTransfer.split(':')[1]);
+            } else {
+                console.warn('Tipo de arrastre no reconocido en drop de habitación.');
+                return;
+            }
+
+            const passengerToMove = seatData[sourceSeatNumber];
+            // No permitir mover un asiento vacío
+            if (!passengerToMove || !passengerToMove.passengerName || passengerToMove.passengerName.trim() === '') {
+                console.log('No se puede mover un asiento vacío a una habitación.');
+                return;
+            }
+
+            saveState(); // Guardar el estado antes de realizar la reasignación
+
+            // Obtener el tipo de habitación del destino del drop
+            const targetRoomType = targetRoomDiv.dataset.roomTypeTarget; 
+
+            // Asignar el nuevo roomType al pasajero
+            seatData[sourceSeatNumber].roomType = targetRoomType;
+            console.log(`Pasajero ${passengerToMove.passengerName} (Asiento ${sourceSeatNumber}) movido a la categoría de habitación: ${targetRoomType}`);
+            
+            // Re-renderizar todas las secciones para reflejar los cambios en la UI
+            renderSeatMap();
+            renderPassengerList();
+            renderRoomSections();
+        }
+
+        /**
+         * Actualiza los listeners de drag and drop y click para un elemento dado.
+         * Esto es útil para re-aplicar listeners cuando el DOM se actualiza.
+         * @param {HTMLElement} element - El elemento DOM al que se aplicarán los listeners.
+         * @param {boolean} isListItem - True si el elemento es un item de la lista de pasajeros, false si es un asiento del mapa.
+         */
+        function updateDragListeners(element, isListItem = false) {
+            // Eliminar listeners existentes para evitar duplicados si esta función se llama varias veces
+            element.removeEventListener('dragstart', handleDragStart);
+            element.removeEventListener('dragover', handleDragOver);
+            element.removeEventListener('dragleave', handleDragLeave);
+            element.removeEventListener('drop', handleDrop);
+            element.removeEventListener('dragend', handleDragEnd);
+            element.removeEventListener('click', handleClick);
+
+            element.removeEventListener('dragstart', handleListItemDragStart);
+            element.removeEventListener('dragover', handleListItemDragOver);
+            element.removeEventListener('dragleave', handleListItemDragLeave);
+            element.removeEventListener('drop', handleListItemDrop);
+            element.removeEventListener('dragend', handleListItemDragEnd);
+            element.removeEventListener('click', handleListItemClick);
+
+
+            // Añadir los listeners correctos según si es un asiento o un elemento de lista
+            element.addEventListener('dragstart', isListItem ? handleListItemDragStart : handleDragStart);
+            element.addEventListener('dragover', isListItem ? handleListItemDragOver : handleDragOver);
+            element.addEventListener('dragleave', isListItem ? handleListItemDragLeave : handleDragLeave);
+            element.addEventListener('drop', isListItem ? handleListItemDrop : handleDrop);
+            element.addEventListener('dragend', isListItem ? handleListItemDragEnd : handleDragEnd);
+            element.addEventListener('click', isListItem ? handleListItemClick : handleClick);
+        }
+
+        // --- Funciones para la Ficha de Asiento (Modal deslizante) ---
+        // Estas funciones manejan la interacción con el modal de detalles del asiento.
+
+        /**
+         * Abre la ficha de detalles de un asiento específico y la rellena con sus datos.
+         * @param {number} seatNumber - El número del asiento a mostrar.
+         */
+        function openSeatCard(seatNumber) {
+            currentSelectedSeatNumber = seatNumber; // Almacena el asiento actualmente seleccionado
+            const data = seatData[seatNumber]; // Obtiene los datos del asiento
+
+            // Rellenar los campos de la ficha con los datos del asiento
+            seatNumberCard.textContent = seatNumber;
+            passengerNameCard.value = data.passengerName || ''; // Si no hay nombre, campo vacío
+            paidAmountCard.value = data.paidAmount;
+            totalAmountCard.textContent = `$${data.totalAmount.toFixed(2)}`;
+            dueCard.textContent = `$${(data.totalAmount - data.paidAmount).toFixed(2)}`;
+            roomTypeCard.value = data.roomType || 'N/A'; // Cargar el tipo de habitación, por defecto 'N/A'
+
+            // Mostrar/ocultar el botón de generación de perfil con IA
+            if (data.passengerName && data.passengerName.trim() !== '') {
+                generateProfileBtn.classList.remove('hidden');
+            } else {
+                generateProfileBtn.classList.add('hidden');
+                passengerProfileDisplay.classList.add('hidden'); // Ocultar si no hay pasajero
+                passengerProfileDisplay.textContent = ''; // Limpiar contenido
+            }
+            profileLoadingIndicator.classList.add('hidden'); // Asegurarse de que el indicador de carga esté oculto al abrir
+
+            // Actualizar el campo "Resta por Pagar" dinámicamente al cambiar el monto pagado
+            paidAmountCard.oninput = () => {
+                const currentPaid = parseFloat(paidAmountCard.value) || 0;
+                dueCard.textContent = `$${(data.totalAmount - currentPaid).toFixed(2)}`;
+            };
+
+            // Mostrar la ficha deslizándola hacia la vista
+            seatDetailsCard.classList.remove('translate-x-full');
+            seatDetailsCard.classList.add('translate-x-0');
+
+            // Quitar la clase 'seat-selected' de todos los asientos previamente seleccionados
+            document.querySelectorAll('.seat-selected').forEach(s => s.classList.remove('seat-selected'));
+            // Aplicar la clase 'seat-selected' al asiento actual en el mapa y en la lista
+            const selectedSeatElement = document.querySelector(`.seat-wrapper[data-seat-number="${seatNumber}"]`);
+            if (selectedSeatElement) selectedSeatElement.classList.add('seat-selected');
+            const selectedListItemElement = document.querySelector(`.passenger-list-item[data-seat-number="${seatNumber}"]`);
+            if (selectedListItemElement) selectedListItemElement.classList.add('seat-selected');
+        }
+
+        /**
+         * Cierra la ficha de detalles del asiento deslizándola fuera de la vista.
+         * Limpia las variables relacionadas y las clases de selección.
+         */
+        window.closeSeatCard = function() {
+            seatDetailsCard.classList.remove('translate-x-0');
+            seatDetailsCard.classList.add('translate-x-full');
+            currentSelectedSeatNumber = null; // Reinicia la variable de asiento seleccionado
+            // Limpiar y ocultar el perfil generado al cerrar la ficha
+            passengerProfileDisplay.classList.add('hidden');
+            passengerProfileDisplay.textContent = ''; 
+            profileLoadingIndicator.classList.add('hidden');
+
+            // Desmarcar todos los asientos al cerrar la ficha
+            document.querySelectorAll('.seat-selected').forEach(el => el.classList.remove('seat-selected'));
+        };
+
+        // Event listener para el botón "Guardar" dentro de la ficha de detalles
+        saveChangesBtn.onclick = () => {
+            if (currentSelectedSeatNumber !== null) { // Asegurarse de que hay un asiento seleccionado
+                saveState(); // Guardar el estado ANTES de aplicar los cambios
+
+                // Obtener los nuevos valores de los campos de la ficha
+                const newName = passengerNameCard.value.trim();
+                const newPaidAmount = parseFloat(paidAmountCard.value) || 0;
+                const newRoomType = roomTypeCard.value; 
+
+                // Actualizar los datos del asiento en el array `seatData`
+                seatData[currentSelectedSeatNumber].passengerName = newName;
+                seatData[currentSelectedSeatNumber].paidAmount = newPaidAmount;
+                seatData[currentSelectedSeatNumber].roomType = newRoomType;
+                
+                // Re-renderizar las secciones de la UI para reflejar los cambios
+                renderSeatMap();
+                renderPassengerList();
+                renderRoomSections();
+                closeSeatCard(); // Cerrar la ficha después de guardar
+                console.log(`Cambios guardados para asiento ${currentSelectedSeatNumber}: Pasajero: ${newName}, Pagado: $${newPaidAmount.toFixed(2)}, Habitación: ${newRoomType}`);
+            }
+        };
+
+        // Event listener para el botón "Vaciar Asiento" dentro de la ficha de detalles
+        clearSeatBtn.onclick = () => {
+            if (currentSelectedSeatNumber !== null) {
+                // Mostrar modal de confirmación antes de vaciar el asiento
+                showCustomConfirm(
+                    'Confirmar Vaciar Asiento',
+                    `¿Estás seguro de que quieres vaciar el asiento ${currentSelectedSeatNumber}?`,
+                    (confirmed) => {
+                        if (confirmed) { // Si el usuario confirma
+                            saveState(); // Guardar el estado ANTES de vaciar
+                            // Resetear los datos del asiento
+                            seatData[currentSelectedSeatNumber].passengerName = '';
+                            seatData[currentSelectedSeatNumber].paidAmount = 0; 
+                            seatData[currentSelectedSeatNumber].roomType = 'N/A'; 
+                            
+                            // Re-renderizar y cerrar la ficha
+                            renderSeatMap();
+                            renderPassengerList();
+                            renderRoomSections();
+                            closeSeatCard();
+                            console.log(`Asiento ${currentSelectedSeatNumber} vaciado.`);
+                        }
+                    }
+                );
+            }
+        };
+
+        // --- Funciones de Gestión de Datos y Estado ---
+        // Estas funciones manejan la lógica de la aplicación, incluyendo el almacenamiento en `localStorage`
+        // y la implementación de la función de "deshacer".
+
+        /**
+         * Intercambia los datos de dos asientos en el array `seatData`.
+         * Se utiliza para el arrastrar y soltar de pasajeros.
+         * @param {number} seat1Number - Número del primer asiento.
+         * @param {number} seat2Number - Número del segundo asiento.
+         */
+        function swapSeatData(seat1Number, seat2Number) {
+            console.log(`Iniciando swap de datos: Asiento ${seat1Number} con ${seat2Number}`);
+            saveState(); // Guardar el estado antes de realizar el intercambio
+
+            // Copiar los datos completos de los asientos para el intercambio
+            const data1 = { ...seatData[seat1Number] };
+            const data2 = { ...seatData[seat2Number] };
+
+            // Intercambiar los datos de los pasajeros, manteniendo el `seatNumber` original de cada objeto.
+            // Esto asegura que los datos sigan asociados a su posición física en el autobús.
+            seatData[seat1Number].passengerName = data2.passengerName;
+            seatData[seat1Number].paidAmount = data2.paidAmount;
+            seatData[seat1Number].totalAmount = data2.totalAmount;
+            seatData[seat1Number].roomType = data2.roomType; // También se mueve el roomType
+
+            seatData[seat2Number].passengerName = data1.passengerName;
+            seatData[seat2Number].paidAmount = data1.paidAmount;
+            seatData[seat2Number].totalAmount = data1.totalAmount;
+            seatData[seat2Number].roomType = data1.roomType; // También se mueve el roomType
+            
+            console.log(`Datos Actualizados:`);
+            console.log(`Asiento ${seat1Number}:`, seatData[seat1Number]);
+            console.log(`Asiento ${seat2Number}:`, seatData[seat2Number]);
+
+            // Actualizar el DOM de todas las secciones para reflejar los cambios
+            renderSeatMap();
+            renderPassengerList();
+            renderRoomSections();
+
+            console.log(`Swap de datos completado entre ${seat1Number} y ${seat2Number}.`);
+        }
+
+        /**
+         * Habilita o deshabilita el botón de deshacer según si hay estados en la pila.
+         */
+        function updateUndoButtonState() {
+            undoButton.disabled = undoStack.length === 0;
+        }
+
+        /**
+         * Guarda el estado actual de `seatData` en la pila de deshacer.
+         * Realiza una copia profunda para evitar referencias.
+         */
+        function saveState() {
+            // Clonar profundamente `seatData` para almacenar una instantánea independiente
+            const currentState = JSON.parse(JSON.stringify(seatData));
+            if (undoStack.length >= maxUndoStates) {
+                undoStack.shift(); // Eliminar el estado más antiguo si se supera el límite
+            }
+            undoStack.push(currentState); // Añadir el nuevo estado a la pila
+            updateUndoButtonState(); // Actualizar el estado del botón de deshacer
+            saveStateToLocalStorage(); // Sincronizar también con localStorage
+            console.log(`Estado guardado. Total estados: ${undoStack.length}`);
+        }
+
+        /**
+         * Guarda el estado actual de `seatData` en el `localStorage` del navegador.
+         */
+        function saveStateToLocalStorage() {
+            try {
+                // Almacenar solo los asientos válidos (no el índice 0 que no se usa)
+                const serializableSeatData = seatData.slice(1); 
+                localStorage.setItem('seatAppState', JSON.stringify(serializableSeatData)); // Usamos 'seatAppState' como clave consistente
+                console.log('Estado guardado en localStorage.');
+            } catch (e) {
+                console.error('Error al guardar en localStorage:', e);
+            }
+        }
+
+        /**
+         * Carga el estado de la aplicación desde el `localStorage`.
+         * Si no hay estado guardado o es inválido, devuelve `false`.
+         * @returns {boolean} `true` si se cargó un estado, `false` en caso contrario.
+         */
+        function loadStateFromLocalStorage() {
+            try {
+                const storedState = localStorage.getItem('seatAppState'); // Intenta obtener el estado guardado
+                if (storedState) {
+                    const parsedState = JSON.parse(storedState);
+                    // Reconstruir `seatData`, asegurando que el índice 0 esté vacío y los demás se rellenen
+                    seatData = [null]; // El índice 0 permanece nulo
+                    for(let i = 0; i < parsedState.length; i++){
+                        // Asegurarse de que el `seatNumber` del objeto exista y sea un número válido
+                        if (parsedState[i] && parsedState[i].seatNumber && typeof parsedState[i].seatNumber === 'number') {
+                            seatData[parsedState[i].seatNumber] = parsedState[i];
+                        }
+                    }
+                    // Rellenar asientos que faltan o están vacíos hasta `totalSeats`
+                    for (let i = 1; i <= totalSeats; i++) {
+                        if (!seatData[i]) { // Si un asiento no se cargó o no existe, inicialízalo
+                            seatData[i] = {
+                                seatNumber: i,
+                                passengerName: '',
+                                paidAmount: 0,
+                                totalAmount: defaultTotalAmount,
+                                roomType: 'N/A' 
+                            };
+                        }
+                    }
+                    console.log('Estado cargado desde localStorage.');
+                    return true; // Indica que se cargó un estado
+                }
+            } catch (e) {
+                console.error('Error al cargar desde localStorage:', e);
+                localStorage.removeItem('seatAppState'); // Limpiar datos corruptos para evitar problemas futuros
+            }
+            return false; // No se cargó un estado válido
+        }
+
+        /**
+         * Deshace el último cambio revirtiendo el estado de `seatData` al estado anterior en la pila.
+         */
+        function undoLastChange() {
+            if (undoStack.length > 0) {
+                closeSeatCard(); // Cierra la ficha si está abierta al deshacer
+                undoStack.pop(); // Elimina el estado actual (el que vamos a revertir)
+                if (undoStack.length > 0) { 
+                    // Restaurar el estado más reciente en la pila (el "anterior")
+                    seatData = JSON.parse(JSON.stringify(undoStack[undoStack.length - 1])); 
+                } else { 
+                    // Si la pila está vacía después del pop, volvemos al estado inicial "vacío" o por defecto
+                    resetAllSeatsData(false); // Resetea datos sin guardar en stack (para evitar recursión)
+                }
+                
+                // Redibujar toda la UI para reflejar el estado deshecho
+                renderSeatMap();
+                renderPassengerList();
+                renderRoomSections();
+                updateUndoButtonState(); // Actualizar el estado del botón de deshacer
+                saveStateToLocalStorage(); // Sincronizar con localStorage
+                console.log('Último cambio deshecho.');
+            } else {
+                console.log('No hay más cambios para deshacer.');
+            }
+        }
+
+        // Asignar el listener al botón de deshacer
+        undoButton.addEventListener('click', undoLastChange);
+
+        // Listener para el botón "Guardar Cambios" del footer (exporta los datos a un archivo JSON)
+        saveAllChangesBtn.addEventListener('click', () => {
+            // Filtrar los datos para incluir solo los asientos con pasajero asignado
+            const passengersToSave = seatData.slice(1).filter(seat => seat.passengerName && seat.passengerName.trim() !== '');
+            const jsonData = JSON.stringify(passengersToSave, null, 2); // Formatear JSON para legibilidad
+
+            // Crear un Blob y un enlace para descargar el archivo JSON
+            const blob = new Blob([jsonData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'NHViajes_datos.json'; // Nombre del archivo a descargar
+            document.body.appendChild(a);
+            a.click(); // Simular clic para iniciar la descarga
+            document.body.removeChild(a); // Eliminar el enlace del DOM
+            URL.revokeObjectURL(url); // Liberar el objeto URL
+            console.log('Datos guardados como JSON.');
+        });
+
+        /**
+         * Resetea todos los datos de los asientos a su estado inicial (vacío).
+         * @param {boolean} shouldSaveState - Si `true`, guarda el estado actual antes de resetear.
+         */
+        function resetAllSeatsData(shouldSaveState = true) {
+            if (shouldSaveState) saveState(); // Opcionalmente, guarda el estado actual antes de resetear
+            for (let i = 1; i <= totalSeats; i++) {
+                seatData[i] = {
+                    seatNumber: i,
+                    passengerName: '',
+                    paidAmount: 0,
+                    totalAmount: defaultTotalAmount,
+                    roomType: 'N/A' 
+                };
+            }
+            // Re-renderizar toda la UI después del reseteo
+            renderSeatMap();
+            renderPassengerList();
+            renderRoomSections();
+            localStorage.removeItem('seatAppState'); // Limpiar `localStorage`
+            undoStack.length = 0; // Vaciar la pila de deshacer
+            updateUndoButtonState(); // Actualizar el estado del botón
+            closeSeatCard(); // Cerrar ficha si está abierta
+            console.log('Todos los datos de los asientos han sido reseteados y localStorage limpiado.');
+        }
+
+        // Listener para el botón "Resetear Viaje" del footer
+        resetBtn.addEventListener('click', () => {
+            // Mostrar modal de confirmación antes de resetear
+            showCustomConfirm(
+                'Confirmar Reseteo',
+                '¿Estás seguro de que quieres borrar todos los datos de los asientos y limpiar el almacenamiento local? Esta acción no se puede deshacer.',
+                (confirmed) => {
+                    if (confirmed) {
+                        resetAllSeatsData(); // Realizar el reseteo si se confirma
+                    }
+                }
+            );
+        });
+
+        // --- Funciones de Renderizado ---
+        // Estas funciones se encargan de actualizar la interfaz de usuario
+        // basándose en el estado actual de `seatData`.
+
+        /**
+         * Renderiza el mapa de asientos actualizando las visuales de cada asiento.
+         */
+        function renderSeatMap() {
+            document.querySelectorAll('.seat-wrapper').forEach(seatWrapper => {
+                const seatNumber = parseInt(seatWrapper.dataset.seatNumber);
+                const data = seatData[seatNumber];
+
+                if (data) {
+                    seatWrapper.dataset.passengerName = data.passengerName;
+                    const passengerNameFrame = seatWrapper.querySelector('.passenger-name-frame');
+                    if (passengerNameFrame) {
+                        passengerNameFrame.textContent = data.passengerName;
+                    }
+                    updateSeatVisuals(seatWrapper, data); // Llama a una función auxiliar para actualizar la visual
+                }
+            });
+        }
+
+        /**
+         * Renderiza la lista de pasajeros, incluyendo los asientos ocupados y disponibles.
+         */
+        function renderPassengerList() {
+            passengerListContainer.innerHTML = ''; // Limpiar la lista existente para re-renderizar
+
+            // Ordenar pasajeros: primero los ocupados (por número de asiento), luego los disponibles (por número de asiento)
+            const sortedSeatData = seatData.slice(1).sort((a, b) => {
+                const aOccupied = a.passengerName && a.passengerName.trim() !== '';
+                const bOccupied = b.passengerName && b.passengerName.trim() !== '';
+
+                if (aOccupied && !bOccupied) return -1; // Ocupados primero
+                if (!aOccupied && bOccupied) return 1;
+                return a.seatNumber - b.seatNumber; // Luego por número de asiento
+            });
+
+
+            sortedSeatData.forEach(data => {
+                const listItem = document.createElement('div');
+                listItem.classList.add('passenger-list-item');
+                listItem.dataset.seatNumber = data.seatNumber;
+                listItem.dataset.passengerName = data.passengerName; // Necesario para drag & drop
+
+                if (data.passengerName && data.passengerName.trim() !== '') {
+                    listItem.draggable = true; // Solo arrastrable si hay un pasajero
+                    listItem.innerHTML = `
+                        <span class="passenger-list-seat-number">${data.seatNumber}</span>
+                        <div class="passenger-list-info">
+                            <div class="passenger-list-name">${data.passengerName}</div>
+                            <div class="passenger-list-details">
+                                Pagado: $${data.paidAmount.toFixed(2)} - Resta: $${(data.totalAmount - data.paidAmount).toFixed(2)}
+                            </div>
+                        </div>
+                        <div class="payment-indicator ${getPaymentStatusClass(data.paidAmount, data.totalAmount)}"></div>
+                    `;
+                } else {
+                    listItem.draggable = false; // Asiento vacío no es arrastrable
+                    listItem.innerHTML = `
+                        <span class="passenger-list-seat-number">${data.seatNumber}</span>
+                        <div class="passenger-list-info">
+                            <div class="passenger-list-name text-[var(--text-secondary-color)]">Asiento Disponible</div>
+                        </div>
+                    `;
+                }
+                passengerListContainer.appendChild(listItem);
+                updateDragListeners(listItem, true); // Aplicar listeners de drag a los elementos de la lista
+            });
+        }
+
+        /**
+         * Actualiza las clases visuales de un asiento en el mapa (ocupado/disponible, indicador de pago).
+         * @param {HTMLElement} seatWrapper - El elemento `seat-wrapper` del asiento.
+         * @param {object} data - Los datos del asiento.
+         */
+        function updateSeatVisuals(seatWrapper, data) {
+            const seatButton = seatWrapper.querySelector('.seat');
+            
+            // Remover clases de estado previas
+            seatButton.classList.remove('seat-occupied', 'seat-available');
+
+            // Aplicar la clase de estado actual
+            if (data.passengerName && data.passengerName.trim() !== '') {
+                seatButton.classList.add('seat-occupied');
+            } else {
+                seatButton.classList.add('seat-available');
+            }
+
+            const passengerNameFrame = seatWrapper.querySelector('.passenger-name-frame');
+            if (passengerNameFrame) {
+                // Mostrar el nombre del pasajero o vaciar si no hay
+                if (!data.passengerName || data.passengerName.trim() === '') {
+                    passengerNameFrame.textContent = '';
+                } else {
+                    passengerNameFrame.textContent = data.passengerName;
+                }
+            } else {
+                console.error(`Error: .passenger-name-frame no encontrado en asiento ${seatWrapper.dataset.seatNumber}`);
+            }
+
+            // Actualizar el indicador de pago en el asiento
+            let paymentIndicator = seatWrapper.querySelector('.seat-payment-indicator');
+            if (!paymentIndicator) { // Si no existe, crearlo
+                paymentIndicator = document.createElement('div');
+                paymentIndicator.classList.add('seat-payment-indicator');
+                seatWrapper.appendChild(paymentIndicator);
+            }
+            // Actualizar las clases de color del indicador
+            paymentIndicator.className = 'seat-payment-indicator ' + getPaymentStatusClass(data.paidAmount, data.totalAmount);
+            // Hacer el indicador visible solo si hay un pasajero
+            if (data.passengerName && data.passengerName.trim() !== '') {
+                paymentIndicator.style.display = 'block';
+            } else {
+                paymentIndicator.style.display = 'none';
+            }
+        }
+
+        /**
+         * Renderiza las secciones de habitaciones agrupando a los pasajeros por tipo de habitación.
+         * Aplica un diseño adaptable para el número de columnas de habitaciones.
+         */
+        function renderRoomSections() {
+            roomSectionsContainer.innerHTML = ''; // Limpiar contenido existente para re-renderizar
+
+            // Objeto para agrupar pasajeros por su 'roomType' (Doble, Triple, Cuádruple, N/A)
+            const roomsCategorized = {
+                'Doble': [],
+                'Triple': [],
+                'Cuádruple': [],
+                'N/A': [] 
+            };
+
+            // Agrupar solo los asientos que tienen un pasajero asignado en sus respectivas categorías
+            seatData.slice(1).filter(passenger => passenger.passengerName && passenger.passengerName.trim() !== '').forEach(passenger => {
+                const roomType = passenger.roomType || 'N/A'; // Usar 'N/A' si no está definido
+                if (!roomsCategorized[roomType]) {
+                    roomsCategorized[roomType] = [];
+                }
+                roomsCategorized[roomType].push(passenger);
+            });
+
+            // Configuración de los tipos de habitaciones con sus nombres, capacidades y colores
+            const roomConfig = {
+                'Doble': { capacity: 2, color: '#007bff', sectionTitle: 'Habitaciones Dobles', roomTypeName: 'Doble' },
+                'Triple': { capacity: 3, color: '#28a745', sectionTitle: 'Habitaciones Triples', roomTypeName: 'Triple' },
+                'Cuádruple': { capacity: 4, color: '#6f42c1', sectionTitle: 'Habitaciones Cuádruples', roomTypeName: 'Cuádruple' },
+                'N/A': { capacity: 1, color: '#6c757d', sectionTitle: 'Pasajeros Sin Asignar', roomTypeName: 'N/A' } // Para pasajeros sin un roomType definido
+            };
+
+            // Definir el orden en que se mostrarán las secciones de habitaciones
+            const roomTypeOrder = ['Doble', 'Triple', 'Cuádruple', 'N/A'];
+            
+            let roomCounter = 1; // Inicializar el contador de habitaciones (para asignar números a las habitaciones)
+
+            roomTypeOrder.forEach(type => {
+                const config = roomConfig[type]; // Obtener la configuración para el tipo de habitación actual
+                const passengers = roomsCategorized[type]; // Obtener los pasajeros de esa categoría
+                
+                // Ordenar los pasajeros dentro de cada tipo de habitación por número de asiento para consistencia
+                passengers.sort((a, b) => a.seatNumber - b.seatNumber);
+
+                const currentTypeRooms = [];
+                // Dividir los pasajeros en grupos según la capacidad de la habitación para el conteo y visualización
+                for (let i = 0; i < passengers.length; i += config.capacity) {
+                    const roomPassengers = passengers.slice(i, i + config.capacity);
+                    if (roomPassengers.length > 0) { // Solo si hay pasajeros para formar una "habitación"
+                        currentTypeRooms.push({
+                            type: type,
+                            color: config.color,
+                            roomTypeName: config.roomTypeName,
+                            passengers: roomPassengers
+                        });
+                    }
+                }
+
+                // Solo renderizar la sección si hay habitaciones creadas o si es la sección "Sin asignar"
+                if (currentTypeRooms.length > 0 || type === 'N/A') { 
+                    const sectionDiv = document.createElement('div');
+                    sectionDiv.classList.add('room-type-section');
+
+                    const sectionTitle = document.createElement('h3');
+                    sectionTitle.textContent = `${config.sectionTitle} (${currentTypeRooms.length} habitaciones)`;
+                    sectionDiv.appendChild(sectionTitle);
+
+                    const roomGridDiv = document.createElement('div');
+                    roomGridDiv.classList.add('room-type-grid');
+                    sectionDiv.appendChild(roomGridDiv);
+
+                    // Determinar el número de columnas basado en el tamaño de la ventana para el diseño adaptable
+                    let cellsInRow = 3; // Default para móvil/tablet
+                    if (window.innerWidth >= 1024) { // Para escritorio
+                        cellsInRow = 4;
+                    }
+
+                    // Calcular el número total de celdas a renderizar para mantener la cuadrícula completa
+                    let totalCellsForType = currentTypeRooms.length;
+                    if (type === 'N/A' && currentTypeRooms.length === 0) {
+                        totalCellsForType = 1; // Asegurar al menos una celda para el drop target de "Sin asignar"
+                    } else if (currentTypeRooms.length === 0 && type !== 'N/A') {
+                        return; // No renderizar secciones de habitaciones vacías si no son "Sin asignar"
+                    }
+                    const finalCellsToRender = Math.max(totalCellsForType, Math.ceil(totalCellsForType / cellsInRow) * cellsInRow);
+
+                    for (let i = 0; i < finalCellsToRender; i++) {
+                        const individualRoomDiv = document.createElement('div');
+                        individualRoomDiv.classList.add('individual-room-grid-item');
+                        individualRoomDiv.dataset.roomTypeTarget = config.roomTypeName; // Almacena el tipo de habitación para el drop
+
+                        // Hacer la celda de la habitación un drop target
+                        individualRoomDiv.addEventListener('dragover', handleRoomDragOver);
+                        individualRoomDiv.addEventListener('dragleave', handleRoomDragLeave);
+                        individualRoomDiv.addEventListener('drop', handleRoomDrop);
+
+                        if (i < currentTypeRooms.length) { // Renderizar habitaciones con pasajeros
+                            const roomData = currentTypeRooms[i];
+                            // El color del borde se define en CSS y es más sutil
+                            // individualRoomDiv.style.borderColor = roomData.color; 
+
+                            const roomTitle = document.createElement('div');
+                            roomTitle.classList.add('room-title');
+                            // El color de fondo del título es más neutro, no usa el color directo del roomData.
+                            // roomTitle.style.backgroundColor = roomData.color; 
+                            // Mostrar número de habitación o "Sin asignar"
+                            roomTitle.textContent = (type === 'N/A') ? 'Sin asignar' : `Hab. ${roomCounter++}`; 
+                            individualRoomDiv.appendChild(roomTitle);
+
+                            roomData.passengers.forEach(p => {
+                                const passengerEntry = document.createElement('div');
+                                passengerEntry.classList.add('passenger-entry');
+
+                                const seatNumSpan = document.createElement('span');
+                                seatNumSpan.classList.add('seat-num-badge');
+                                seatNumSpan.textContent = p.seatNumber; // Número de asiento del pasajero
+                                passengerEntry.appendChild(seatNumSpan);
+
+                                const passengerNameSpan = document.createElement('span');
+                                passengerNameSpan.classList.add('passenger-name-display');
+                                // Concatenar número de asiento y nombre para mostrar
+                                passengerNameSpan.textContent = `${p.seatNumber}. ${p.passengerName}`; 
+                                passengerEntry.appendChild(passengerNameSpan);
+
+                                individualRoomDiv.appendChild(passengerEntry);
+                            });
+                            // Eliminar margen inferior del último pasajero para evitar espacio extra
+                            if (roomData.passengers.length > 0) {
+                                individualRoomDiv.lastElementChild.style.marginBottom = '0';
+                            }
+                        } else { // Placeholder para celdas vacías en la cuadrícula
+                            individualRoomDiv.classList.add('empty-room-placeholder');
+                            individualRoomDiv.innerHTML = '<span class="material-icons-outlined text-4xl mb-2">hotel</span><br><span>Espacio de habitación disponible</span>';
+                            // Para la sección "Sin asignar", si no hay pasajeros, el placeholder tiene un mensaje específico
+                            if (type === 'N/A' && currentTypeRooms.length === 0) {
+                                individualRoomDiv.innerHTML = '<span class="material-icons-outlined text-4xl mb-2">person_off</span><br><span>Arrastra pasajeros sin asignar aquí</span>';
+                            }
+                        }
+                        roomGridDiv.appendChild(individualRoomDiv);
+                    }
+                    roomSectionsContainer.appendChild(sectionDiv);
+                }
+            });
+        }
+
+
+        // --- Funciones de Inicialización ---
+
+        /**
+         * Inicializa el array `seatData` con datos por defecto para todos los asientos.
+         * Incluye algunos datos de ejemplo si no se cargan del `localStorage`.
+         */
+        function initializeDefaultSeatData() {
+            seatData = []; // Resetear para asegurar un array limpio
+            for (let i = 0; i <= totalSeats; i++) { // Incluir índice 0 como nulo para mantener compatibilidad con números de asiento 1-basados
+                seatData[i] = {
+                    seatNumber: i,
+                    passengerName: '',
+                    paidAmount: 0,
+                    totalAmount: defaultTotalAmount,
+                    roomType: 'N/A' // Por defecto, sin tipo de habitación asignado
+                };
+            }
+
+            // Simular algunos datos iniciales de pasajeros (ejemplo)
+            // Estos datos SÓLO se cargarán si no hay datos persistentes en localStorage
+            seatData[1] = { seatNumber: 1, passengerName: 'Juan Pérez', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Doble' };
+            seatData[2] = { seatNumber: 2, passengerName: 'Ana García', paidAmount: 50, totalAmount: defaultTotalAmount, roomType: 'Doble' };
+            seatData[3] = { seatNumber: 3, passengerName: 'Carlos López', paidAmount: 0, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[4] = { seatNumber: 4, passengerName: 'María Ruiz', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[6] = { seatNumber: 6, passengerName: 'Pedro Gómez', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Doble' };
+            seatData[8] = { seatNumber: 8, passengerName: 'Laura Díaz', paidAmount: 75, totalAmount: defaultTotalAmount, roomType: 'Doble' };
+            seatData[9] = { seatNumber: 9, passengerName: 'Miguel Sánchez', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Cuádruple' };
+            seatData[11] = { seatNumber: 11, passengerName: 'Isabel Flores', paidAmount: 25, totalAmount: defaultTotalAmount, roomType: 'Cuádruple' };
+            seatData[14] = { seatNumber: 14, passengerName: 'Jorge Torres', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[15] = { seatNumber: 15, passengerName: 'Elena Vargas', paidAmount: 0, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[17] = { seatNumber: 17, passengerName: 'Ricardo Castro', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Doble' };
+            seatData[20] = { seatNumber: 20, passengerName: 'Sofía Morales', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Doble' };
+            seatData[21] = { seatNumber: 21, passengerName: 'David Ramos', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[22] = { seatNumber: 22, passengerName: 'Gabriela Soto', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[23] = { seatNumber: 23, passengerName: 'Arturo Herrera', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[24] = { seatNumber: 24, passengerName: 'Verónica Reyes', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[27] = { seatNumber: 27, passengerName: 'Quintín Quintero', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Cuádruple' };
+            seatData[28] = { seatNumber: 28, passengerName: 'Roberto Núñez', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Cuádruple' };
+            seatData[29] = { seatNumber: 29, passengerName: 'Sara Vidal', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Doble' };
+            seatData[30] = { seatNumber: 30, passengerName: 'Tomás Pineda', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Doble' };
+            seatData[32] = { seatNumber: 32, passengerName: 'Úrsula González', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[33] = { seatNumber: 33, passengerName: 'Víctor Ochoa', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[35] = { seatNumber: 35, passengerName: 'Wendy Ortiz', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[36] = { seatNumber: 36, passengerName: 'Ximena Cruz', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[37] = { seatNumber: 37, passengerName: 'Yolanda Luna', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Cuádruple' };
+            seatData[38] = { seatNumber: 38, passengerName: 'Zoe Montes', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Cuádruple' };
+            seatData[39] = { seatNumber: 39, passengerName: 'Adriana Peña', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Cuádruple' };
+            seatData[42] = { seatNumber: 42, passengerName: 'Brandon Ríos', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Doble' };
+            seatData[43] = { seatNumber: 43, passengerName: 'Camila Salas', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Doble' };
+            seatData[44] = { seatNumber: 44, passengerName: 'Daniel Vega', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Doble' };
+            // Añadir más pasajeros para forzar más habitaciones y probar el diseño flexible
+            seatData[5] = { seatNumber: 5, passengerName: 'Fernando Rey', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Doble' };
+            seatData[7] = { seatNumber: 7, passengerName: 'Patricia Solis', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Doble' };
+            seatData[10] = { seatNumber: 10, passengerName: 'Luis Cano', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[12] = { seatNumber: 12, passengerName: 'Nadia Ruiz', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[13] = { seatNumber: 13, passengerName: 'Oscar Bravo', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[16] = { seatNumber: 16, passengerName: 'Marta Pérez', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Cuádruple' };
+            seatData[18] = { seatNumber: 18, passengerName: 'José Luis', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Cuádruple' };
+            seatData[19] = { seatNumber: 19, passengerName: 'Fátima Gar.', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Cuádruple' };
+            seatData[25] = { seatNumber: 25, passengerName: 'Héctor Soto', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Doble' };
+            seatData[26] = { seatNumber: 26, passengerName: 'Irene Montes', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Doble' };
+            seatData[31] = { seatNumber: 31, passengerName: 'Julia López', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[34] = { seatNumber: 34, passengerName: 'Kevin Diaz', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Triple' };
+            seatData[40] = { seatNumber: 40, passengerName: 'Lina Góm.', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Cuádruple' };
+            seatData[41] = { seatNumber: 41, passengerName: 'Marco Polo', paidAmount: 100, totalAmount: defaultTotalAmount, roomType: 'Cuádruple' };
+        }
+
+        // --- Función para generar perfil de pasajero usando Gemini API ---
+        /**
+         * Genera un perfil corto y creativo para un pasajero utilizando la API de Gemini.
+         * Muestra un indicador de carga mientras se espera la respuesta.
+         * @param {string} passengerName - El nombre del pasajero para quien se generará el perfil.
+         */
+        async function generatePassengerProfile(passengerName) {
+            if (!passengerName || passengerName.trim() === '') {
+                passengerProfileDisplay.textContent = 'No hay nombre de pasajero para generar un perfil.';
+                passengerProfileDisplay.classList.remove('hidden');
+                return;
+            }
+
+            profileLoadingIndicator.classList.remove('hidden'); // Mostrar indicador de carga
+            passengerProfileDisplay.classList.add('hidden'); // Ocultar resultados anteriores
+
+            const prompt = `Genera un perfil corto y creativo para un pasajero de autobús llamado ${passengerName}. Incluye algunos detalles imaginarios sobre sus posibles intereses o el motivo de su viaje. Limítate a 2-3 frases.`;
+            let chatHistory = [];
+            chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+            const payload = { contents: chatHistory };
+            const apiKey = ""; // La API key se proporciona en tiempo de ejecución por Canvas
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Error de la API: ${response.status} - ${errorData.error.message || 'Error desconocido'}`);
+                }
+
+                const result = await response.json();
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    passengerProfileDisplay.textContent = text; // Mostrar el perfil generado
+                    passengerProfileDisplay.classList.remove('hidden');
+                } else {
+                    passengerProfileDisplay.textContent = 'No se pudo generar el perfil. Inténtalo de nuevo.';
+                    passengerProfileDisplay.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error al llamar a la API de Gemini:', error);
+                passengerProfileDisplay.textContent = `Error al generar perfil: ${error.message}`;
+                passengerProfileDisplay.classList.remove('hidden');
+            } finally {
+                profileLoadingIndicator.classList.add('hidden'); // Ocultar indicador de carga
+            }
+        }
+
+        // --- Event Listener para el botón de generar perfil ---
+        generateProfileBtn.addEventListener('click', () => {
+            if (currentSelectedSeatNumber !== null) {
+                const passengerName = passengerNameCard.value.trim();
+                generatePassengerProfile(passengerName);
+            }
+        });
+
+
+        // --- Ejecución al cargar la página ---
+        // Este bloque se ejecuta una vez que el DOM está completamente cargado.
+        
+        // Inicializar los `data-seat-number` y los listeners de drag and drop para los asientos iniciales
+        document.querySelectorAll('.seat-wrapper').forEach(seat => {
+            if (!seat.dataset.seatNumber) {
+                const seatNumber = parseInt(seat.querySelector('.seat span').textContent);
+                seat.dataset.seatNumber = seatNumber;
+            }
+            updateDragListeners(seat);
+        });
+
+        // Cargar estado desde localStorage o inicializar con datos por defecto
+        const loadedFromStorage = loadStateFromLocalStorage();
+        if (!loadedFromStorage) {
+            initializeDefaultSeatData(); // Si no hay datos guardados, usar los datos por defecto
+        }
+
+        // Renderizar el mapa de asientos, la lista de pasajeros y las secciones de habitaciones inicialmente
+        renderSeatMap();
+        renderPassengerList();
+        renderRoomSections();
+
+        // Si no se cargó desde localStorage, guardar el estado inicial para la pila de deshacer
+        if (!loadedFromStorage) {
+            saveState(); // Guardar el estado inicial de la app en la pila y localStorage
+        } else {
+            // Si se cargó desde localStorage, asegurar que la pila de deshacer tenga el estado actual
+            if (undoStack.length === 0) {
+                 undoStack.push(JSON.parse(JSON.stringify(seatData)));
+            }
+        }
+        updateUndoButtonState(); // Actualizar el estado del botón de deshacer al inicio
+    });
+</script>
+
+</body>
+</html>
