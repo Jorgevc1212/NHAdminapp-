@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa de Habitaciones</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <style>
+        /* --- Estilos Generales y Reseteo --- */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: #f5f8fa;
+            margin: 0;
+            padding: 1.5vw;
+            box-sizing: border-box;
+            line-height: 1.6;
+            color: #333;
+        }
+        .container {
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        /* --- Encabezado y Subencabezado --- */
+        .header {
+            color: #1c2526;
+            font-size: 4.5vw;
+            font-weight: 700;
+            margin-bottom: 0.5vw;
+            text-align: center;
+        }
+        .subheader {
+            color: #657786;
+            font-size: 3.2vw;
+            margin-bottom: 2vw;
+            text-align: center;
+        }
+
+        /* --- Secciones de Habitaciones --- */
+        .section {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 2vw;
+            margin-bottom: 2vw;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .section:last-child {
+            margin-bottom: 0;
+        }
+        .section-title {
+            color: #1c2526;
+            font-size: 3.8vw;
+            font-weight: 600;
+            margin-bottom: 1.5vw;
+            text-align: center;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(100px, 1fr));
+            gap: 1.5vw;
+        }
+
+        /* --- Tarjetas de Habitación y "Agregar Habitación" --- */
+        .room, .add-room-card {
+            border: 1px solid #e1e8ed;
+            background-color: #fff;
+            border-radius: 6px;
+            padding: 1vw;
+            text-align: center;
+            min-height: 18vw;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            position: relative;
+            box-sizing: border-box;
+        }
+        
+        .room {
+            cursor: grab; /* Cursor para Drag & Drop */
+        }
+
+        .add-room-card {
+            border: 1px dashed #aab8c2;
+            background-color: #f5f8fa;
+            color: #657786;
+            transition: background-color 0.2s ease-in-out;
+            cursor: pointer; /* Cursor para el botón de agregar */
+        }
+        .add-room-card:hover {
+            background-color: #e1e8ed;
+        }
+        .add-room-icon {
+            font-size: 6vw;
+            color: #aab8c2;
+            margin-bottom: 0.5vw;
+        }
+        .add-room-text {
+            font-size: 3vw;
+            font-weight: 500;
+            color: #657786;
+        }
+
+        /* --- Detalles de Habitación (Número y Huéspedes) --- */
+        .room-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5vw;
+        }
+        .room-number {
+            font-weight: 600;
+            color: #1c2526;
+            font-size: 3.8vw;
+        }
+        .menu-icon {
+            font-size: 4vw;
+            color: #657786;
+            cursor: pointer;
+            padding: 0.5vw; /* Aumenta el área clickable */
+            border-radius: 50%;
+            transition: background-color 0.2s;
+        }
+        .menu-icon:hover {
+            background-color: #e1e8ed;
+        }
+
+        .guest-list {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column; /* Apilar fichas verticalmente */
+            align-items: flex-start;
+            justify-content: flex-start;
+            padding-left: 0.5vw;
+            text-align: left;
+            overflow: hidden;
+        }
+        .guest {
+            color: #1c2526;
+            font-size: 2.7vw;
+            margin: 0.5px 0;
+            display: flex;
+            align-items: center;
+            width: 100%; /* Permite que la ficha ocupe el ancho disponible */
+            cursor: grab;
+            margin-bottom: 0.5vw; /* Espacio entre huéspedes */
+            box-sizing: border-box; /* Asegura padding no afecte el width */
+        }
+        .guest-icon {
+            margin-right: 0.5vw;
+            color: #1da1f2;
+            font-size: 2.8vw;
+        }
+        
+        /* Ficha de Huésped */
+        .guest-chip {
+            background-color: #e6f7ff; /* Light blue */
+            color: #1da1f2; /* Twitter blue */
+            padding: 0.3vw 0.8vw; /* Small padding */
+            border-radius: 12px; /* Rounded corners */
+            font-size: 2.5vw; /* Slightly smaller font */
+            display: inline-flex; /* To contain text and maybe icon */
+            align-items: center;
+            flex-grow: 1; /* Para que la ficha ocupe el espacio restante */
+            overflow: hidden;
+        }
+        .guest-number-display {
+            font-weight: 600;
+            margin-right: 0.5vw;
+            white-space: nowrap;
+        }
+        .guest-name-display {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex-grow: 1;
+        }
+        
+        /* --- Drag & Drop Styles --- */
+        .room.drag-over, .add-room-card.drag-over, .guest.drag-over {
+            border: 2px dashed #1da1f2;
+            background-color: #e6f7ff;
+        }
+        .guest.dragging {
+            opacity: 0.5;
+        }
+
+        /* --- Modal Styles --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .modal-content {
+            background-color: #fff;
+            padding: 3vw;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            width: 90%;
+            max-width: 600px; /* Ancho máximo para desktop */
+            transform: translateY(-20px);
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            max-height: 90vh; /* Para que sea scrollable si el contenido es grande */
+        }
+        .modal-overlay.show .modal-content {
+            transform: translateY(0);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e1e8ed;
+            padding-bottom: 2vw;
+            margin-bottom: 2vw;
+        }
+        .modal-title {
+            font-size: 4vw;
+            font-weight: 600;
+            color: #1c2526;
+        }
+        .modal-close-button {
+            background: none;
+            border: none;
+            font-size: 5vw;
+            color: #aab8c2;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .modal-body {
+            padding-bottom: 2vw;
+            overflow-y: auto; /* Permite scroll en el cuerpo si es necesario */
+        }
+        .modal-body label {
+            display: block;
+            margin-bottom: 1vw;
+            font-size: 2.8vw;
+            font-weight: 500;
+            color: #657786;
+        }
+        /* Estilos para la información de solo lectura en el modal */
+        .modal-info-display {
+            padding: 1.5vw;
+            margin-bottom: 2vw;
+            border: 1px solid #e1e8ed;
+            border-radius: 4px;
+            font-size: 2.8vw;
+            color: #1c2526;
+            background-color: #f9f9f9;
+        }
+
+        .modal-body ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .modal-body li {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1.5vw;
+        }
+        .modal-body li input {
+            flex-grow: 1;
+            margin-left: 1vw;
+            padding: 1.5vw;
+            border: 1px solid #e1e8ed;
+            border-radius: 4px;
+            font-size: 2.8vw;
+        }
+        .modal-body .guest-icon-modal {
+            font-size: 3.5vw;
+            color: #1da1f2;
+        }
+        .guest-number-modal {
+            font-weight: 600;
+            font-size: 2.8vw;
+            margin-left: 0.5vw;
+            margin-right: 0.5vw;
+            color: #1c2526;
+        }
+
+        .modal-footer {
+            border-top: 1px solid #e1e8ed;
+            padding-top: 2vw;
+            margin-top: 2vw;
+            display: flex;
+            justify-content: flex-end;
+            gap: 1.5vw;
+        }
+        .modal-footer button {
+            padding: 1.8vw 3.5vw;
+            border-radius: 20px;
+            font-size: 3vw;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .modal-footer button.cancel-button {
+            background-color: #e1e8ed;
+            color: #657786;
+            border: none;
+        }
+        .modal-footer button.cancel-button:hover {
+            background-color: #ccd6dd;
+        }
+        .modal-footer button.save-button {
+            background-color: #1da1f2;
+            color: #fff;
+            border: none;
+        }
+        .modal-footer button.save-button:hover {
+            background-color: #0c85d0;
+        }
+        .modal-footer button.delete-button {
+            background-color: #e0245e;
+            color: #fff;
+            border: none;
+            margin-right: auto; /* Empuja el botón de eliminar a la izquierda */
+        }
+        .modal-footer button.delete-button:hover {
+            background-color: #c01c4f;
+        }
+
+
+        /* --- Media Queries (Ajustes para pantallas más grandes) --- */
+        @media (min-width: 601px) {
+            body { padding: 20px; }
+            .header { font-size: 2.5em; }
+            .subheader { font-size: 1.1em; }
+            .section-title { font-size: 1.3em; }
+            .grid { grid-template-columns: repeat(3, 1fr); gap: 15px; }
+            .room, .add-room-card { min-height: 120px; padding: 15px; }
+            .room-header { margin-bottom: 5px; }
+            .room-number { font-size: 1.5em; }
+            .menu-icon { font-size: 1.3em; padding: 5px; }
+            .guest, .add-room-text { font-size: 0.9em; margin-bottom: 5px; } /* Adjust margin-bottom for desktop */
+            .guest-icon { font-size: 1em; margin-right: 5px;}
+            
+            .guest-chip {
+                padding: 4px 8px;
+                border-radius: 12px;
+                font-size: 0.85em;
+            }
+            .guest-number-display {
+                margin-right: 5px;
+            }
+
+            /* Modal desktop adjustments */
+            .modal-content {
+                padding: 20px 30px;
+            }
+            .modal-title {
+                font-size: 1.8em;
+            }
+            .modal-close-button {
+                font-size: 1.8em;
+            }
+            .modal-header {
+                padding-bottom: 15px;
+                margin-bottom: 15px;
+            }
+            .modal-body label {
+                margin-bottom: 5px;
+                font-size: 0.9em;
+            }
+            .modal-info-display {
+                padding: 10px;
+                margin-bottom: 15px;
+                font-size: 0.9em;
+            }
+            .modal-body li {
+                margin-bottom: 10px;
+            }
+            .modal-body li input {
+                padding: 10px;
+                font-size: 0.9em;
+            }
+            .modal-body .guest-icon-modal {
+                font-size: 1.2em;
+            }
+            .guest-number-modal {
+                font-size: 0.9em;
+                margin-left: 5px;
+                margin-right: 5px;
+            }
+            .modal-footer {
+                padding-top: 15px;
+                margin-top: 15px;
+                gap: 10px;
+            }
+            .modal-footer button {
+                padding: 10px 20px;
+                font-size: 0.9em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="header">Mapa de Habitaciones</h1>
+        <p class="subheader">Arrastra pasajeros a las habitaciones para reasignarlos. El tipo de habitación se ajustará.</p>
+
+        <section class="section">
+            <h2 class="section-title">Huéspedes No Asignados</h2>
+            <div class="grid" id="unassignedGuestsGrid">
+                </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">Habitaciones Doble</h2>
+            <div class="grid" id="doubleRoomsGrid">
+                </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">Habitaciones Triple</h2>
+            <div class="grid" id="tripleRoomsGrid">
+                </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">Habitaciones Cuádruple</h2>
+            <div class="grid" id="quadrupleRoomsGrid">
+                </div>
+        </section>
+
+    </div>
+
+    <div class="modal-overlay" id="mainModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">Detalles de Habitación</h3>
+                <button class="modal-close-button material-icons">close</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="currentRoomId">
+                <label>Número de Habitación:</label>
+                <div id="modalRoomNumberDisplay" class="modal-info-display"></div>
+                
+                <label>Tipo:</label>
+                <div id="modalRoomTypeDisplay" class="modal-info-display"></div>
+
+                <label>Capacidad:</label>
+                <div id="modalRoomCapacityDisplay" class="modal-info-display"></div>
+
+                <label>Huéspedes:</label>
+                <ul id="modalGuestList">
+                    </ul>
+            </div>
+            <div class="modal-footer">
+                <button class="delete-button">Eliminar Habitación</button>
+                <button class="cancel-button">Cancelar</button>
+                <button class="save-button">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let draggedGuest = null; // Elemento DOM del huésped que se está arrastrando
+        let currentEditingRoomId = null;
+        let nextGuestNumber = 45; // Para asignar números a nuevos huéspedes, comienza después del 44
+
+        // Objeto para llevar un registro del siguiente número disponible para cada tipo de habitación
+        let nextRoomNumbers = {
+            'Doble': 1,
+            'Triple': 1,
+            'Cuádruple': 1
+        };
+
+        // Función para generar huéspedes con ID y números únicos del 1 al 44
+        function generateInitialGuests(count) {
+            const guests = [];
+            for (let i = 1; i <= count; i++) {
+                guests.push({ id: `G${i.toString().padStart(3, '0')}`, name: `Huésped ${i}`, num: i });
+            }
+            return guests;
+        }
+
+        // Estructura de datos para las habitaciones
+        const roomsData = {
+            'D1': { id: 'D1', number: '1', type: 'Doble', capacity: 2, guests: [] },
+            'D2': { id: 'D2', number: '2', type: 'Doble', capacity: 2, guests: [] },
+            'D3': { id: 'D3', number: '3', type: 'Doble', capacity: 2, guests: [] },
+            'D4': { id: 'D4', number: '4', type: 'Doble', capacity: 2, guests: [] },
+            'D5': { id: 'D5', number: '5', type: 'Doble', capacity: 2, guests: [] },
+            'D6': { id: 'D6', number: '6', type: 'Doble', capacity: 2, guests: [] },
+            'D7': { id: 'D7', number: '7', type: 'Doble', capacity: 2, guests: [] },
+            'D8': { id: 'D8', number: '8', type: 'Doble', capacity: 2, guests: [] },
+            'T1': { id: 'T1', number: '1', type: 'Triple', capacity: 3, guests: [] },
+            'T2': { id: 'T2', number: '2', type: 'Triple', capacity: 3, guests: [] },
+            'T3': { id: 'T3', number: '3', type: 'Triple', capacity: 3, guests: [] },
+            'T4': { id: 'T4', number: '4', type: 'Triple', capacity: 3, guests: [] },
+            'T5': { id: 'T5', number: '5', type: 'Triple', capacity: 3, guests: [] },
+            'T6': { id: 'T6', number: '6', type: 'Triple', capacity: 3, guests: [] },
+            'T7': { id: 'T7', number: '7', type: 'Triple', capacity: 3, guests: [] },
+            'Q1': { id: 'Q1', number: '1', type: 'Cuádruple', capacity: 4, guests: [] },
+            'Q2': { id: 'Q2', number: '2', type: 'Cuádruple', capacity: 4, guests: [] },
+            'Q3': { id: 'Q3', number: '3', type: 'Cuádruple', capacity: 4, guests: [] }
+        };
+
+        let unassignedGuestsData = []; // Huéspedes que no están en ninguna habitación
+
+        // Función para calcular los próximos números de habitación basados en las habitaciones existentes
+        function initializeNextRoomNumbers() {
+            for (const roomId in roomsData) {
+                const room = roomsData[roomId];
+                const roomNumber = parseInt(room.number);
+                if (!isNaN(roomNumber)) { // Asegurar que sea un número válido
+                    if (room.type === 'Doble' && roomNumber >= nextRoomNumbers['Doble']) {
+                        nextRoomNumbers['Doble'] = roomNumber + 1;
+                    } else if (room.type === 'Triple' && roomNumber >= nextRoomNumbers['Triple']) {
+                        nextRoomNumbers['Triple'] = roomNumber + 1;
+                    } else if (room.type === 'Cuádruple' && roomNumber >= nextRoomNumbers['Cuádruple']) {
+                        nextRoomNumbers['Cuádruple'] = roomNumber + 1;
+                    }
+                }
+            }
+            console.log("Initial nextRoomNumbers:", nextRoomNumbers);
+        }
+
+        // Función para asignar huéspedes a las habitaciones de manera inicial
+        function distributeGuestsInitially() {
+            const allAvailableGuests = generateInitialGuests(44); // Genera los 44 huéspedes
+
+            // Copiar roomsData para asignación sin modificar el original directamente aún
+            const tempRoomsData = JSON.parse(JSON.stringify(roomsData));
+            
+            let guestIndex = 0;
+            const roomIdsOrdered = Object.keys(tempRoomsData).sort(); 
+
+            for (const roomId of roomIdsOrdered) {
+                const room = tempRoomsData[roomId];
+                room.guests = []; 
+
+                for (let i = 0; i < room.capacity; i++) {
+                    if (guestIndex < allAvailableGuests.length) {
+                        room.guests.push(allAvailableGuests[guestIndex]);
+                        guestIndex++;
+                    } else {
+                        break; 
+                    }
+                }
+            }
+            // Actualizar roomsData global con los huéspedes asignados
+            Object.assign(roomsData, tempRoomsData);
+
+            // Los huéspedes restantes (si los hay) van a no asignados
+            unassignedGuestsData = allAvailableGuests.slice(guestIndex);
+            console.log("Huéspedes no asignados inicialmente:", unassignedGuestsData);
+        }
+
+        // --- Referencias del DOM para el Modal ---
+        const mainModal = document.getElementById('mainModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalCloseButton = document.querySelector('.modal-close-button');
+ 
